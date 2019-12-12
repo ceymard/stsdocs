@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "sourceMap": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "outDir": "./__build__",
+    "rootDir": ".",
+    "noStrictGenericChecks": true,
+    "experimentalDecorators": true,
+    "jsx": "react",
+    // "jsxFactory": "s",
+    "reactNamespace": "s",
+    "resolveJsonModule": true,
+    "lib": ["dom", "es7"],
+    //"plugins": [
+    //  { "transform": "comptime/comptime" }
+    //],
+    "types": ["node"]
+  },
+  "exclude": ["__dist__", "__build__"]
+}
