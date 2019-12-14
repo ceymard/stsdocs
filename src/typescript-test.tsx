@@ -2,7 +2,7 @@ import * as ts from 'ts-morph'
 import { s, Part, Switch } from 'stsx'
 import { Base } from './tpl'
 import css from './css'
-import { Class, FnProto, Interface, TypeAlias, ParamOrVar, VarDecl } from './widgets'
+import { Class, FnProto, Interface, TypeAlias, ParamOrVar, VarDecl, Docs } from './widgets'
 
 // process.chdir('/home/chris/swapp/optdeps/elt')
 const p = new ts.Project({
@@ -24,18 +24,8 @@ const src = p.getSourceFile('index.ts')!
 // Enum
 // TypeAlias
 // Interface
-// Namespace (which contains the rest)
-
-function handleType(t: ts.Type) {
-  if (t.isTuple()) {
-
-  } else if (t.isArray()) {
-
-  // Now, the types where we could have type parameters.
-  } else if (t.isClass() || t.isInterface()) {
-
-  }
-}
+// Namespace (which contains the rest) | Modules
+// missing Expression, probably in the case of default exports
 
 
 // All the nodes that are to be rendered.
@@ -112,6 +102,8 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
   for (var exp of decls) {
     var [name, bl] = exp
     var full_name = prefix ? `${prefix}.${name}` : name
+    var d = [] as ts.ExportedDeclarations[]
+
     if (bl.filter(b => b instanceof ts.FunctionDeclaration).length > 1) {
       var i = bl.length - 1
       findfn: while (i >= 0) {
@@ -122,47 +114,18 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
         i--
       }
     }
-    res.push([full_name, bl as Documentable[]])
-    // console.log(full_name, bl.map(node => node.constructor.name))
+
     for (var node of bl) {
-
-      // console.log(full_name, node.constructor.name)
-      // console.log('===>', st)
-      // console.log(st, ed.getSourceFile().getBaseName(), ed.getStartLineNumber())
-      // if (node instanceof ts.ClassDeclaration) {
-        // console.log(<Class cls={node}/>)
-
-        // console.log(node.getStaticMembers().map(m => [`${full_name}.${m.getName()}`, m.constructor.name]))
-
-        // const ext = node.getExtends()
-        // const impl = node.getImplements()
-        // if (ext) {
-          // const typ = ext.getType()
-          // if (typ.isClassOrInterface()) {
-            // console.log(typ)
-          // }
-          // How to retrieve the original location of a symbol !
-          // console.log(name, ext.getType().getSymbol()?.getValueDeclaration()?.getSourceFile().getFilePath())
-        // }
-        // console.log(st.name)
-        // console.log(st.docs)
-        // console.log(st.name, st.extends, st.implements, st.methods?.map(m => m.name))
-      // } else if (node instanceof ts.FunctionDeclaration) {
-        // we're going to have to add arguments and return type to the rendered nodes.
-        // if they're API then they're added to the TOC.
-        // there should be a "namespace" path somewhere, since we're considering coming from an entry point
-        // o.Observable
-        // tf.stuff
-        // const st = node.getStructure()
-        // console.log('function', st.returnType)
-      // } else if (node instanceof ts.VariableDeclaration) {
-        // const st = node.getStructure()
-        // console.log('var', st.name)
       if (node instanceof ts.NamespaceDeclaration || node instanceof ts.SourceFile) {
         // const st = node.getStructure()
         res = [...res, ...handleExportedDeclarations(node.getExportedDeclarations(), full_name)]
+      } else {
+        d.push(node)
       }
     }
+
+    if (d.length)
+      res.push([full_name, d as Documentable[]])
   }
   return res
 }
@@ -177,14 +140,19 @@ class Test extends Part {
   init() {
     this.base.title = 'elt documentation'
      this.body.push(() => <>
-      {res.map(([name, syms]) => <div class={css.block}>{syms.map(t =>
-        t instanceof ts.FunctionDeclaration ? <FnProto name={name} proto={t}/> :
-        t instanceof ts.ClassDeclaration ? <Class name={name} cls={t}/> :
-        t instanceof ts.InterfaceDeclaration ? <Interface name={name} cls={t}/> :
-        t instanceof ts.TypeAliasDeclaration ? <TypeAlias name={name} typ={t}/> :
-        t instanceof ts.VariableDeclaration ? <VarDecl name={name} v={t}/> :
-        t.constructor.name
-      )}</div>)}
+      {res.map(([name, syms]) => <div class={css.block}>
+        {syms.map(t =>
+          t instanceof ts.FunctionDeclaration ? <FnProto name={name} proto={t}/> :
+          t instanceof ts.ClassDeclaration ? <Class name={name} cls={t}/> :
+          t instanceof ts.InterfaceDeclaration ? <Interface name={name} cls={t}/> :
+          t instanceof ts.TypeAliasDeclaration ? <TypeAlias name={name} typ={t}/> :
+          t instanceof ts.VariableDeclaration ? <VarDecl name={name} v={t}/> :
+          t instanceof ts.NamespaceDeclaration ? <div class={css.kind_namespace}>
+            <div class={css.name}><span class={css.kind}>namespace</span><b>{name}</b></div>
+          </div> : ''
+        )}
+        <Docs docs={syms}/>
+      </div>)}
     </>)
   }
 }

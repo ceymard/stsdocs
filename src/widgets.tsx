@@ -23,42 +23,25 @@ function clean_comment(comment: string) {
   return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]*)/gm, '')
 }
 
-function docs(node: Documentable) {
-  var docs = ''
-  if (node instanceof ts.VariableDeclaration) {
-    var p = node.getParent()
-    if (!(p instanceof ts.VariableDeclarationList)) return false
-    var p2 = p.getParent()
-    if (!(p2 instanceof ts.VariableStatement)) return false
-    docs = p2.getJsDocs().map(d => clean_comment(d.getText())).join('\n')
-  } else {
-    docs = node.getJsDocs().map(d => clean_comment(d.getText())).join('\n')
-  }
-  return docs
-}
-
-export function Link({text, kind}: Attrs & {text: string, kind: string}) {
-
-}
-
 function T(typ: ts.TypeNode | ts.Type | ts.Expression | undefined | null) {
   return <Type type={typ}/>
 }
 export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expression | undefined | null}) {
   if (!type) return raw('')
   if (type instanceof ts.Type) {
+    var txt = type.getText()
 
     if (type.isLiteral()
       || type.isAny()
-      || type.isBoolean()
       || type.isNull()
+      || type.isBoolean()
       || type.isUndefined()
       || type.isNumber()
       || type.isString()
       || type.isUnknown()
-      || ['void'].includes(type.getText())
+      || ['void'].includes(txt)
     ) {
-      return <span>{type.getText()}</span>
+      return <span>{txt}</span>
     } else if (type.isUnion()) {
       return <span>{Repeat(type.getUnionTypes(), typ => T(typ), ' | ')}</span>
     } else if (type.isTuple()) {
@@ -66,7 +49,20 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
     } else if (type.isIntersection()) {
       return <span>{Repeat(type.getIntersectionTypes(), typ => T(typ), ' & ')}</span>
     } else if (type.getArrayElementType()) {
-      console.log('!@#!@#!@#')
+      // console.log(type.getText())
+      // console.log(type.getArrayElementType()?.getText())
+      // FIXME why does the following throw a max call stack size exceeded ????
+      // return <span><Type type={type.getArrayElementType()}/>[]</span>
+      return <span>{type.getArrayElementType()?.getText().replace(/import\("[^"]*"\)\./g, '')}[]</span>
+      // console.log('!@#!@#!@#')
+    } else if ('indexType' in type.compilerType) {
+      // const t2 = type.
+      const ot = type as any
+      const t = type.compilerType as any
+      // console.dir(t, {depth: 0})
+      const idx = new (ts.Type as any)(ot._context, t.indexType)
+      const obj = new (ts.Type as any)(ot._context, t.objectType)
+      return <span><Type type={obj}/>[<Type type={idx}/>]</span>
     } else if (type.isAnonymous()) {
       // we'll try to get a declaration, at least
       // var res = type.getSymbol()?.getTypeAtLocation(type.getSymbol()?.getValueDeclaration()!)
@@ -82,40 +78,42 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       if (ts.Node.isClassDeclaration(first) || ts.Node.isInterfaceDeclaration(first)) {
         // Problem : we lose the qualified name and mostly the type parameters.
         var ta = type.getTypeArguments()
+        ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
         // THERE IS A LINK HERE AS WELL !
-        return <span>{first.getName()}{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
+        return <span><b>{first.getName()}</b>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
       }
 
       // FIXME
       // return <span>INFER ANON {type.getText()} [{decls.map(d => d.constructor.name)}]</span>
-      return <span>{type.getText().replace(/import\("[^"]*"\)\./g, '')}</span>
+      return <span>{txt.replace(/import\("[^"]*"\)\./g, '')}</span>
     }
 
-    console.log('TYPE - ', type.constructor.name, type.getText())
-    return <span>INFERRED TYPE ({type.getText()}) [{type.compilerType.isClass()}]</span>
+    // console.dir(type.compilerType, {depth: 0})
+    console.log('TYPE NOT FOUND - ', type.constructor.name, type.compilerType.constructor.name, type.getText())
+    return <span>{txt}</span>
 
   } else if (type instanceof ts.TypeNode) {
 
     if (ts.Node.isUnionTypeNode(type)) {
-      return <span>{Repeat(type.getTypeNodes(), typ => T(typ), ' | ')}</span>
+      return <span class={css.type}>{Repeat(type.getTypeNodes(), typ => T(typ), ' | ')}</span>
     } else if (ts.Node.isIntersectionTypeNode(type)) {
-      return <span>{Repeat(type.getTypeNodes(), typ => T(typ), ' & ')}</span>
+      return <span class={css.type}>{Repeat(type.getTypeNodes(), typ => T(typ), ' & ')}</span>
     } else if (ts.Node.isTupleTypeNode(type)) {
-      return <span>[{Repeat(type.getElementTypeNodes(), typ => T(typ), ', ')}]</span>
+      return <span class={css.type}>[{Repeat(type.getElementTypeNodes(), typ => T(typ), ', ')}]</span>
     } else if (ts.Node.isArrayTypeNode(type)) {
       return <span><Type type={type.getElementTypeNode()}/>[]</span>
     } else if (ts.Node.isParenthesizedTypeNode(type)) {
       return <span>(<Type type={type.getTypeNode()}/>)</span>
     } else if (ts.Node.isTypePredicateNode(type)) {
-      return <span>{type.getParameterNameNode().getText()} is <Type type={type.getTypeNode()}/></span>
+      return <span class={css.type}>{type.getParameterNameNode().getText()} is <Type type={type.getTypeNode()}/></span>
     } else if (ts.Node.isTypeReferenceNode(type)) {
       // THIS IS WHERE WE CREATE A LINK !
       return <span>{type.getTypeName().getText()}<TypeArgs ts={type.getTypeArguments()}/></span>
       // console.log(type.getType())
     } else if (ts.Node.isFunctionTypeNode(type)) {
-      return <span>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>
+      return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>
     } else if (ts.Node.isConditionalTypeNode(type)) {
-      return <span><Type type={type.getCheckType()}/> extends <Type type={type.getExtendsType()}/> ? <Type type={type.getTrueType()}/> : <Type type={type.getFalseType()}/></span>
+      return <span class={css.type}><Type type={type.getCheckType()}/> extends <Type type={type.getExtendsType()}/> ? <Type type={type.getTrueType()}/> : <Type type={type.getFalseType()}/></span>
       // console.log('!!!', type.getText())
     } else if (ts.Node.isInferTypeNode(type)) {
       return <span>infer {type.getTypeParameter().getName()}</span>
@@ -139,12 +137,8 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
     ) {
       return <span>{type.getText()}</span>
     } else if (ts.Node.isTypeLiteralNode(type)) {
-      var a = type.getMembers()
-      for (var _ of a) {
-        console.log(_.getText())
-      }
-      // console.log('WHAT NOW ?')
-
+      // type.getIndexSignatures()
+    return <span class={css.type}>{'{'} {Repeat(type.getIndexSignatures(), sig => <>[<Type type={sig.getKeyTypeNode()}/>]: <Type type={sig.getReturnTypeNode()}/></>, ', ')} {Repeat(type.getProperties(), p => <>{p.getName()}{p.getQuestionTokenNode() ? '?' : ''}: <Type type={p.getTypeNode()}/></>, ', ')} {'}'}</span>
     }
   } else if (ts.Node.isExpression(type) || ['void', 'any', 'never'].includes(type.getText().trim())) {
     return <span>{type.getText()}</span>
@@ -152,12 +146,18 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
 
   // trying for edge cases not handled by ts-morph
   if (ts.ts.isMappedTypeNode(type.compilerNode)) {
-    console.log('VICTORY !!!')
+    // console.dir(type, {depth: 0 })
+    const chlds = type.getChildren()
+    const has_quest = type.getChildrenOfKind(ts.ts.SyntaxKind.QuestionToken).length > 0
+
+    const param: ts.TypeParameterDeclaration = chlds[2] as any
+    const t: ts.TypeNode = chlds[chlds.length - 2] as any
+
+    return <span>{'{'}[<TypeParam t={param}/>]{has_quest ? '?' : ''}: <Type type={t}/>{'}'}</span>
   } else if (ts.ts.isTypeOperatorNode(type.compilerNode)) {
     // FIXME we should PROBABLY go get the type of this expression and analyze it with the whole
     // getSymbol thing
     return <span>typeof {type.compilerNode.getChildAt(1).getText()}</span>
-    // console.log('TYPEOF')
   }
   // var node = type.compilerNode
 
@@ -169,7 +169,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
 export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, name: string}) {
   return <div class={css.kind_typealias}>
     <div class={css.name}>
-      <span class={css.kind}>T</span>
+      <span class={css.kind}>type</span>
     <b>{name}</b><TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/></div>
   </div>
 }
@@ -178,20 +178,23 @@ export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, na
 export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string}) {
   return <div class={css.kind_interface}>
     <div class={css.name}>
-      <span class={css.kind}>I</span>
+      <span class={css.kind}>interface</span>
     <b>{a.name}</b></div>
   </div>
 }
 
-export function Implements({impl}: Attrs & {impl: ts.ExpressionWithTypeArguments[]}) {
-  return If(impl.length, () => <>implements {Repeat(impl, i => <><Type type={i.getType()}/><TypeArgs ts={i.getTypeArguments()}/></>, ', ')}</>)
+export function ExpressionWithTypeArguments({impl, keyword}: Attrs & {impl: ts.ExpressionWithTypeArguments[] | ts.ExpressionWithTypeArguments | undefined, keyword: string}) {
+  if (!impl) return <></>
+  if (!Array.isArray(impl)) impl = [impl]
+  var _impl = impl as ts.ExpressionWithTypeArguments[]
+  return If(_impl.length, () => <>{keyword} {Repeat(_impl, i => <Type type={i.getType()}/>, ', ')}</>)
 }
 
 export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
   return <div class={css.kind_class}>
     <div class={css.name}>
-      <span class={css.kind}>C</span>
-  <b>{a.name}</b> <Implements impl={a.cls.getImplements()}/></div>
+      <span class={css.kind}>class</span>
+  <b>{a.name}</b> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
   </div>
 }
 
@@ -221,25 +224,37 @@ export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration, name: str
 
 export function TypeParam({t}: Attrs & {t: ts.TypeParameterDeclaration}) {
   var ex = t.getConstraint()
-  return <span>{t.getName()}{If(ex, ex => <> extends <Type type={ex}/></>)}</span>
+  var kind = t.getChildrenOfKind(ts.ts.SyntaxKind.InKeyword).length > 0 ? 'in' :
+    t.getChildrenOfKind(ts.ts.SyntaxKind.OfKeyword).length > 0 ? 'of' :
+    'extends'
+  return <span>{t.getName()}{If(ex, ex => <> {kind} <Type type={ex}/></>)}</span>
 }
 
 export function TypeParams({ts}: Attrs & {ts: ts.TypeParameterDeclaration[]}) {
   return If(ts.length, () => <>&lt;{Repeat(ts, t => <TypeParam t={t}/>, ', ')}&gt;</>)
 }
 export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
-  return If(ts.length, () => <>&lt;{Repeat(ts, typ => <Type type={typ}/>, ', ')}&gt;</>)
+  return If(ts.length > 0, () => <>&lt;{Repeat(ts, typ => <Type type={typ}/>, ', ')}&gt;</>)
 }
 
 export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration, name: string}) {
   var fn = a.proto
-  var docs = clean_comment(fn.getJsDocs().map(d => d.getText()).join('\n').trim())
-  docs = md.render(docs)
 
   return <div class={css.kind_function}>
     <div class={css.name}>
-      <span class={css.kind}>F</span>
+      <span class={css.kind}>function</span>
       <b>{a.name}</b><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/></div>
-    <div class={css.doc}>{raw(docs)}</div>
   </div>
+}
+
+export function Docs({docs}: Attrs & {docs: Documentable[]}) {
+  var clean = clean_comment(
+    docs.map(d => {
+    var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d.getJsDocs()
+    return dc.map(d => d.getText())
+  }).join('\n\n').trim())
+    .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
+    .replace(/@returns?/g, () => ` - **returns**`)
+  var rendered = md.render(clean)
+  return <div class={css.doc}>{raw(rendered)}</div>
 }

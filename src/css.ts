@@ -13,6 +13,7 @@ export const classes = [
   'block',
   'kind',
   'error',
+  'type',
 
   // All the following are used in conjuncion with the classes defined above.
   'kind_function',
