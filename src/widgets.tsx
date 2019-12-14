@@ -1,6 +1,8 @@
 import * as ts from 'ts-morph'
 import { Attrs, s, raw, If, Repeat } from 'stsx';
 import css from './css'
+import * as pth from 'path'
+import * as fs from 'fs'
 
 import * as m from 'markdown-it'
 // import * as h from 'highlight.js'
@@ -78,6 +80,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       if (ts.Node.isClassDeclaration(first) || ts.Node.isInterfaceDeclaration(first)) {
         // Problem : we lose the qualified name and mostly the type parameters.
         var ta = type.getTypeArguments()
+        // console.log(ta.map(a => a.constructor.name))
         ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
         // THERE IS A LINK HERE AS WELL !
         return <span><b>{first.getName()}</b>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
@@ -194,7 +197,7 @@ export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
   return <div class={css.kind_class}>
     <div class={css.name}>
       <span class={css.kind}>class</span>
-  <b>{a.name}</b> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
+  <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
   </div>
 }
 
@@ -248,6 +251,9 @@ export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration, name: string}
 }
 
 export function Docs({docs}: Attrs & {docs: Documentable[]}) {
+  var categories = new Set<string>()
+  var first = docs[0]
+  var src_path = first.getSourceFile().getFilePath()
   var clean = clean_comment(
     docs.map(d => {
     var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d.getJsDocs()
@@ -255,6 +261,20 @@ export function Docs({docs}: Attrs & {docs: Documentable[]}) {
   }).join('\n\n').trim())
     .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
     .replace(/@returns?/g, () => ` - **returns**`)
+    .replace(/@category ([^\n]+)\n?/g, (_, cats: string) => {
+      for (var c of cats.trim().split(/\n,\n/g))
+        categories.add(c.trim())
+      return ''
+    })
+    .replace(/@include\s*([^\n]+)\s*\n?/g, (_, path: string) => {
+      var try_path = pth.join(pth.dirname(src_path), path)
+      try {
+        return fs.readFileSync(try_path, 'utf-8')
+      } catch (e) {
+        return `file not found: "${try_path}"`
+      }
+      return 'PATH'
+    })
   var rendered = md.render(clean)
   return <div class={css.doc}>{raw(rendered)}</div>
 }
