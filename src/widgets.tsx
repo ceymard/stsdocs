@@ -182,7 +182,7 @@ export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string
   return <div class={css.kind_interface}>
     <div class={css.name}>
       <span class={css.kind}>interface</span>
-    <b>{a.name}</b></div>
+    <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/></div>
   </div>
 }
 
