@@ -1,8 +1,8 @@
 import * as ts from 'ts-morph'
-import { s, Part, Switch } from 'stsx'
+import { s, Part, Repeat } from 'stsx'
 import { Base } from './tpl'
 import css from './css'
-import { Class, FnProto, Interface, TypeAlias, ParamOrVar, VarDecl, Docs } from './widgets'
+import { Class, FnProto, Interface, TypeAlias, VarDecl, ClassMember } from './widgets'
 
 // process.chdir('/home/chris/swapp/optdeps/elt')
 const p = new ts.Project({
@@ -36,36 +36,6 @@ export const rendered = new Map<string, {
 }>()
 
 
-function clean_comment(comment: string) {
-  return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]*)/gm, '')
-}
-
-function isTOC(n: ts.ExportedDeclarations[]) {
-  for (var node of n) {
-    if (isDocumentable(node)) {
-      var docs = ''
-      if (node instanceof ts.VariableDeclaration) {
-        var p = node.getParent()
-        if (!(p instanceof ts.VariableDeclarationList)) return false
-        var p2 = p.getParent()
-        if (!(p2 instanceof ts.VariableStatement)) return false
-        docs = p2.getJsDocs().map(d => clean_comment(d.getText())).join('\n')
-      } else {
-        docs = node.getJsDocs().map(d => clean_comment(d.getText())).join('\n')
-      }
-      // console.log(docs)
-      return docs.includes('@api')
-    }
-    // if (node instanceof ts.ClassDeclaration) {
-    // } else if (node instanceof ts.FunctionDeclaration) {
-    //   const dc = node.getStructure().docs
-    //   return dc?.map(d => !d ? '' : typeof d === 'string' ? d : d.description ).join('').includes('@api')
-    // }
-  }
-  return false
-}
-
-
 export const DocumentableTypes = [
   ts.ClassDeclaration,
   ts.InterfaceDeclaration,
@@ -77,21 +47,7 @@ export const DocumentableTypes = [
 ] as const
 
 // All the symbols we are going to provide documentation for.
-export type Documentable =
-  ts.ClassDeclaration |
-  ts.InterfaceDeclaration |
-  ts.FunctionDeclaration |
-  ts.NamespaceDeclaration |
-  ts.VariableDeclaration |
-  ts.EnumDeclaration |
-  ts.TypeAliasDeclaration
-
-function isDocumentable(item: ts.Node): item is Documentable {
-  for (var i = 0, l = DocumentableTypes.length; i < l; i++)
-    if (item instanceof DocumentableTypes[i]) return true
-  return false
-}
-
+export type Documentable = { getJsDocs(): ts.JSDoc[], getSourceFile(): ts.SourceFile }
 
 export const documented_symbols = [] as [string, Documentable[]][]
 
@@ -134,6 +90,7 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
 const res = handleExportedDeclarations(src.getExportedDeclarations())
 res.sort()
 
+// FIXME sort members !
 class Test extends Part {
   base = this.use(Base)
 
@@ -143,15 +100,20 @@ class Test extends Part {
       {res.map(([name, syms]) => <div class={css.block}>
         {syms.map(t =>
           t instanceof ts.FunctionDeclaration ? <FnProto name={name} proto={t}/> :
-          t instanceof ts.ClassDeclaration ? <Class name={name} cls={t}/> :
-          t instanceof ts.InterfaceDeclaration ? <Interface name={name} cls={t}/> :
+          t instanceof ts.ClassDeclaration ? <>
+            <Class name={name} cls={t}/>
+            {Repeat(t.getMembersWithComments(), m => <ClassMember member={m}/>)}
+          </>:
+          t instanceof ts.InterfaceDeclaration ? <>
+            <Interface name={name} cls={t}/>
+            {Repeat(t.getMembersWithComments(), m => <ClassMember member={m}/>)}
+          </> :
           t instanceof ts.TypeAliasDeclaration ? <TypeAlias name={name} typ={t}/> :
           t instanceof ts.VariableDeclaration ? <VarDecl name={name} v={t}/> :
           t instanceof ts.NamespaceDeclaration ? <div class={css.kind_namespace}>
             <div class={css.name}><span class={css.kind}>namespace</span><b>{name}</b></div>
           </div> : ''
         )}
-        <Docs docs={syms}/>
       </div>)}
     </>)
   }

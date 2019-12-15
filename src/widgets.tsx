@@ -1,5 +1,5 @@
 import * as ts from 'ts-morph'
-import { Attrs, s, raw, If, Repeat } from 'stsx';
+import { Attrs, s, raw, If, Repeat, Child } from 'stsx';
 import css from './css'
 import * as pth from 'path'
 import * as fs from 'fs'
@@ -81,7 +81,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
         // Problem : we lose the qualified name and mostly the type parameters.
         var ta = type.getTypeArguments()
         // console.log(ta.map(a => a.constructor.name))
-        ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
+        // ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
         // THERE IS A LINK HERE AS WELL !
         return <span><b>{first.getName()}</b>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
       }
@@ -174,6 +174,7 @@ export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, na
     <div class={css.name}>
       <span class={css.kind}>type</span>
     <b>{name}</b><TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/></div>
+    <Docs docs={[typ]}/>
   </div>
 }
 
@@ -183,6 +184,7 @@ export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string
     <div class={css.name}>
       <span class={css.kind}>interface</span>
     <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/></div>
+    <Docs docs={[a.cls]}/>
   </div>
 }
 
@@ -193,16 +195,23 @@ export function ExpressionWithTypeArguments({impl, keyword}: Attrs & {impl: ts.E
   return If(_impl.length, () => <>{keyword} {Repeat(_impl, i => <Type type={i.getType()}/>, ', ')}</>)
 }
 
+export function Kind(a: Attrs, ch: Child) {
+  if (!ch) return <></>
+  return <span class={css.kind}>{ch}</span>
+}
+
 export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
   return <div class={css.kind_class}>
     <div class={css.name}>
-      <span class={css.kind}>class</span>
+    <Kind>class</Kind>
+      {/* <span class={css.kind}>class</span> */}
   <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
+  <Docs docs={[a.cls]}/>
   </div>
 }
 
 
-export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.VariableDeclaration, name?: string}) {
+export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name?: string}) {
   // console.log('SYM', v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!))
   function resolve() {
     var d = v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!)
@@ -214,14 +223,15 @@ export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.V
   return <span><b>{name ?? v.getName()}</b>: <Type type={v.getTypeNode() ?? resolve() ?? v.getType()}/></span>
 }
 
-export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration, name: string}) {
+export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name: string}) {
   var mod = 'const'
   const p = v.getParent()
   if (p instanceof ts.VariableDeclarationList && p.getText().startsWith('var')) {
     mod = 'var'
   }
   return <div class={css.kind_var}>
-<div class={css.name}><span class={css.kind}>{mod}</span><ParamOrVar v={v} name={name}/></div>
+    <div class={css.name}><span class={css.kind}>{mod}</span><ParamOrVar v={v} name={name}/></div>
+    <Docs docs={[v]}/>
   </div>
 }
 
@@ -240,13 +250,18 @@ export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
   return If(ts.length > 0, () => <>&lt;{Repeat(ts, typ => <Type type={typ}/>, ', ')}&gt;</>)
 }
 
-export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration, name: string}) {
+export function FnArgs(a: Attrs & { params: ts.ParameterDeclaration }) {
+  return <></>
+}
+
+export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration, name: string, kind?: string}) {
   var fn = a.proto
 
   return <div class={css.kind_function}>
     <div class={css.name}>
-      <span class={css.kind}>function</span>
+      <span class={css.kind}>{a.kind ?? 'function'}</span>
       <b>{a.name}</b><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/></div>
+    <Docs docs={[a.proto]}/>
   </div>
 }
 
@@ -277,4 +292,16 @@ export function Docs({docs}: Attrs & {docs: Documentable[]}) {
     })
   var rendered = md.render(clean)
   return <div class={css.doc}>{raw(rendered)}</div>
+}
+
+export function ClassMember({member}: Attrs & {member: ts.ClassMemberTypes | ts.ClassInstanceMemberTypes | ts.TypeElementTypes | ts.CommentClassElement | ts.CommentTypeElement}) {
+  if (member instanceof ts.CommentTypeElement || member instanceof ts.CommentClassElement)
+    return ''
+  if (member instanceof ts.MethodDeclaration)
+    return <FnProto name={member.getName()} proto={member} kind='method'/>
+  if (member instanceof ts.ConstructorDeclaration)
+    return <FnProto name='new ' proto={member} kind='constructor'/>
+  if (member instanceof ts.PropertyDeclaration || member instanceof ts.PropertySignature)
+    return <VarDecl name={member.getName()} v={member}/>
+  return <div>{member.constructor.name}</div>
 }
