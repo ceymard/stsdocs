@@ -174,7 +174,6 @@ export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, na
     <div class={css.name}>
       <span class={css.kind}>type</span>
     <b>{name}</b><TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/></div>
-    <Docs docs={[typ]}/>
   </div>
 }
 
@@ -183,8 +182,7 @@ export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string
   return <div class={css.kind_interface}>
     <div class={css.name}>
       <span class={css.kind}>interface</span>
-    <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/></div>
-    <Docs docs={[a.cls]}/>
+    <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/><ExpressionWithTypeArguments keyword=' extends' impl={a.cls.getExtends()}/></div>
   </div>
 }
 
@@ -206,7 +204,6 @@ export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
     <Kind>class</Kind>
       {/* <span class={css.kind}>class</span> */}
   <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
-  <Docs docs={[a.cls]}/>
   </div>
 }
 
@@ -223,15 +220,16 @@ export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.V
   return <span><b>{name ?? v.getName()}</b>: <Type type={v.getTypeNode() ?? resolve() ?? v.getType()}/></span>
 }
 
-export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name: string}) {
+export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name: string, kind?: string}) {
   var mod = 'const'
   const p = v.getParent()
   if (p instanceof ts.VariableDeclarationList && p.getText().startsWith('var')) {
     mod = 'var'
+  } else if (v instanceof ts.PropertyDeclaration || v instanceof ts.PropertySignature) {
+    mod = ''
   }
   return <div class={css.kind_var}>
     <div class={css.name}><span class={css.kind}>{mod}</span><ParamOrVar v={v} name={name}/></div>
-    <Docs docs={[v]}/>
   </div>
 }
 
@@ -254,14 +252,13 @@ export function FnArgs(a: Attrs & { params: ts.ParameterDeclaration }) {
   return <></>
 }
 
-export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration, name: string, kind?: string}) {
+export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature, name: string, kind?: string}) {
   var fn = a.proto
 
   return <div class={css.kind_function}>
     <div class={css.name}>
       <span class={css.kind}>{a.kind ?? 'function'}</span>
       <b>{a.name}</b><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/></div>
-    <Docs docs={[a.proto]}/>
   </div>
 }
 
@@ -296,12 +293,12 @@ export function Docs({docs}: Attrs & {docs: Documentable[]}) {
 
 export function ClassMember({member}: Attrs & {member: ts.ClassMemberTypes | ts.ClassInstanceMemberTypes | ts.TypeElementTypes | ts.CommentClassElement | ts.CommentTypeElement}) {
   if (member instanceof ts.CommentTypeElement || member instanceof ts.CommentClassElement)
-    return ''
-  if (member instanceof ts.MethodDeclaration)
-    return <FnProto name={member.getName()} proto={member} kind='method'/>
-  if (member instanceof ts.ConstructorDeclaration)
-    return <FnProto name='new ' proto={member} kind='constructor'/>
+    return <></>
+  if (member instanceof ts.MethodDeclaration || member instanceof ts.MethodSignature)
+    return <FnProto name={member.getName()} proto={member} kind=''/>
+  if (member instanceof ts.ConstructorDeclaration || member instanceof ts.ConstructSignatureDeclaration)
+    return <FnProto name='new ' proto={member} kind=''/>
   if (member instanceof ts.PropertyDeclaration || member instanceof ts.PropertySignature)
-    return <VarDecl name={member.getName()} v={member}/>
+    return <VarDecl name={member.getName()} v={member} kind=''/>
   return <div>{member.constructor.name}</div>
 }

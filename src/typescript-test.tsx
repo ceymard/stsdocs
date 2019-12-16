@@ -56,6 +56,7 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
   var res = [] as [string, Documentable[]][]
 
   for (var exp of decls) {
+
     var [name, bl] = exp
     var full_name = prefix ? `${prefix}.${name}` : name
     var d = [] as ts.ExportedDeclarations[]
@@ -90,23 +91,70 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
 const res = handleExportedDeclarations(src.getExportedDeclarations())
 res.sort()
 
+function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
+  return function (a, b) {
+    var e_a = ex(a)
+    var e_b = ex(b)
+    if (e_a < e_b) return -1
+    if (e_a > e_b) return 1
+    return 0
+  }
+}
+
+export type FilterTypes<T, Excl> = T extends Excl ? never : T
+
+const method_sorter = sorter<ts.ClassMemberTypes | ts.TypeElementTypes | ts.CommentClassElement | ts.CommentTypeElement>(elt => {
+  if (elt instanceof ts.CommentClassElement || elt instanceof ts.CommentTypeElement) return ''
+  if (elt instanceof ts.ConstructorDeclaration
+      || elt instanceof ts.ConstructSignatureDeclaration
+      || elt instanceof ts.CallSignatureDeclaration
+      || elt instanceof ts.IndexSignatureDeclaration
+    )
+    return '2-new'
+  var name = elt.getName()
+  if (elt instanceof ts.PropertyDeclaration || elt instanceof ts.PropertySignature)
+    return '0-' + name
+  if (elt instanceof ts.GetAccessorDeclaration)
+    return `1-${name}-get`
+  if (elt instanceof ts.SetAccessorDeclaration)
+    return `1-${name}-set`
+  if (elt instanceof ts.MethodDeclaration || elt instanceof ts.MethodSignature)
+    return `3-${name}`
+  return '6-' + name
+})
+
 // FIXME sort members !
+// Filter out private or internal fields
+// Treat static members as variable declarations.
 class Test extends Part {
   base = this.use(Base)
 
   init() {
     this.base.title = 'elt documentation'
-     this.body.push(() => <>
+     this.body.push(() => <div class='st-row'>
+       <div class='st-toc'>
+        {res.map(([name, syms]) => <div>{name}</div>)}
+       </div>
+       <div class='st-doc'>
       {res.map(([name, syms]) => <div class={css.block}>
         {syms.map(t =>
           t instanceof ts.FunctionDeclaration ? <FnProto name={name} proto={t}/> :
           t instanceof ts.ClassDeclaration ? <>
             <Class name={name} cls={t}/>
-            {Repeat(t.getMembersWithComments(), m => <ClassMember member={m}/>)}
+            {Repeat(t.getMembersWithComments().filter(m => {
+              if (m instanceof ts.CommentClassElement) return false
+              var modifiers = m.getModifiers().map(m => m.getText())
+              var docs = m.getJsDocs()
+              console.log(docs.map(d => d.getTags().map(t => t.getText())))
+              // readonly static protected public private
+              if(modifiers.includes('private') || modifiers.includes('static') || modifiers.includes('protected'))
+                return false
+              return true
+            }).slice().sort(method_sorter), m => <ClassMember member={m}/>)}
           </>:
           t instanceof ts.InterfaceDeclaration ? <>
             <Interface name={name} cls={t}/>
-            {Repeat(t.getMembersWithComments(), m => <ClassMember member={m}/>)}
+            {Repeat(t.getMembersWithComments().slice().sort(method_sorter), m => <ClassMember member={m}/>)}
           </> :
           t instanceof ts.TypeAliasDeclaration ? <TypeAlias name={name} typ={t}/> :
           t instanceof ts.VariableDeclaration ? <VarDecl name={name} v={t}/> :
@@ -115,7 +163,8 @@ class Test extends Part {
           </div> : ''
         )}
       </div>)}
-    </>)
+      </div>
+    </div>)
   }
 }
 
@@ -123,6 +172,3 @@ var t = new Test()
 t.init()
 import * as fs from 'fs'
 t.get(Base).Main().render(fs.createWriteStream('./out/doc.html'))
-// console.log(res.map(r => r[0]))
-
-// console.log(src.getExportedDeclarations())
