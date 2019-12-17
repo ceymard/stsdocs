@@ -194,6 +194,8 @@ export class Documentable {
       return 'constructor'
     if (I(f, ts.PropertyDeclaration) || I(f, ts.PropertySignature))
       return 'prop'
+    if (I(f, ts.CallSignatureDeclaration))
+      return 'call'
     return '???'
   }
 
