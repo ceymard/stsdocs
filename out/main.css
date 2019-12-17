@@ -1,0 +1,144 @@
+html, body {
+  padding: 0; margin: 0;
+  overflow: hidden;
+  background-color: #1c1c1b;
+}
+
+body {
+  font-family: 'Ubuntu', sans-serif;
+  box-sizing: border-box;
+  color: rgb(var(--st-primary));
+  --st-function: 129, 178, 252;
+  --st-class: 202, 166, 183;
+  --st-interface: 177, 176, 174;
+  --st-primary: 255, 255, 255;
+  --st-typealias: 112, 192, 155;
+  --st-var: 240, 155, 117;
+  --st-namespace: 186, 176, 136;
+  --st-error: 255, 99, 99;
+}
+
+.st-type {
+  background-color: rgba(var(--st-primary), 0.14);
+  padding: 0 2px;
+}
+
+code {
+  white-space: pre;
+  background: rgba(var(--st-primary), 0.07);
+  padding: 0 2px;
+}
+
+blockquote {
+  font-size: 0.8em;
+  margin: 0;
+  padding-left: 8px;
+  border-left: 8px solid rgba(var(--st-primary), 0.2);
+  background-color: rgba(var(--st-primary), 0.07);
+}
+
+.st-doc {
+  font-weight: 300;
+}
+
+.st-block {
+  position: relative;
+  /* background-color: rgba(var(--st-primary), 0.06); */
+}
+
+.st-block .st-kind {
+  position: absolute;
+  font-weight: bolder;
+  padding: 0 4px;
+  left: 0;
+  transform: translateX(calc(-100% - 8px));
+  color: rgba(255, 255, 255, 1);
+  background-color: rgba(var(--st-primary), 0.5);
+  border-radius: 5px;
+}
+
+.st-kind-namespace {
+  --st-primary: var(--st-namespace);
+}
+
+.st-kind-function {
+  --st-primary: var(--st-function);
+}
+
+.st-kind-class {
+  --st-primary: var(--st-class);
+}
+
+.st-kind-interface {
+  --st-primary: var(--st-interface);
+}
+
+.st-kind-typealias {
+  --st-primary: var(--st-typealias);
+}
+
+.st-kind-var {
+  --st-primary: var(--st-var);
+}
+
+.st-error {
+  background-color: rgba(var(--st-error), 0.14);
+  /* color: rgba(255, 255, 255, 1); */
+}
+
+.st-name {
+  color: rgba(var(--st-primary), 1);
+  font-family: 'Ubuntu Mono', monospace;
+  font-size: 18px;
+  margin-bottom: 9px;
+}
+
+.st-block ~ .st-block {
+  border-top: rgba(var(--st-primary), 0.07) 2px solid;
+}
+
+pre {
+  background-color: rgba(var(--st-primary), 0.07);
+  padding: 4px;
+}
+
+.hljs-tag {
+  color: rgba(var(--st-function), 1);
+}
+
+
+.st-row {
+  display: flex;
+  flex: row;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+}
+
+.st-toc {
+  padding: 16px;
+  overflow: auto;
+  width: 320px;
+}
+
+.st-docmain {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  padding-left: 90px;
+  flex-basis: 0;
+  flex-grow: 1;
+  overflow: auto;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(var(--st-primary), 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--st-primary), 0.1);
+}
