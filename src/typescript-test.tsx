@@ -1,8 +1,9 @@
 import * as ts from 'ts-morph'
-import { s, Part, Repeat } from 'stsx'
-import { Base } from './tpl'
-import css from './css'
-import { Class, FnProto, Interface, TypeAlias, VarDecl, ClassMember } from './widgets'
+import { Documentable, MapArray } from './documentable'
+// import { s, Part, Repeat } from 'stsx'
+// import { Base } from './tpl'
+// import css from './css'
+// import { Class, FnProto, Interface, TypeAlias, VarDecl, ClassMember } from './widgets'
 
 // process.chdir('/home/chris/swapp/optdeps/elt')
 const p = new ts.Project({
@@ -30,30 +31,30 @@ const src = p.getSourceFile('index.ts')!
 
 // All the nodes that are to be rendered.
 // path is the symbol or the namespace-qualified name
-export const rendered = new Map<string, {
-  nodes: ts.Node[],
-  path: string // the path to the output file corresponding to the single-doc page.
-}>()
+// export const rendered = new Map<string, {
+//   nodes: ts.Node[],
+//   path: string // the path to the output file corresponding to the single-doc page.
+// }>()
 
 
-export const DocumentableTypes = [
-  ts.ClassDeclaration,
-  ts.InterfaceDeclaration,
-  ts.FunctionDeclaration,
-  ts.NamespaceDeclaration,
-  ts.VariableDeclaration,
-  ts.EnumDeclaration,
-  ts.TypeAliasDeclaration
-] as const
+// export const DocumentableTypes = [
+//   ts.ClassDeclaration,
+//   ts.InterfaceDeclaration,
+//   ts.FunctionDeclaration,
+//   ts.NamespaceDeclaration,
+//   ts.VariableDeclaration,
+//   ts.EnumDeclaration,
+//   ts.TypeAliasDeclaration
+// ] as const
 
-// All the symbols we are going to provide documentation for.
-export type Documentable = { getJsDocs(): ts.JSDoc[], getSourceFile(): ts.SourceFile }
+// // All the symbols we are going to provide documentation for.
+// export type Documentable = { getJsDocs(): ts.JSDoc[], getSourceFile(): ts.SourceFile }
 
-export const documented_symbols = [] as [string, Documentable[]][]
+export const documented_symbols = [] as Documentable[]
 
 
 function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclarations[]>, prefix = '') {
-  var res = [] as [string, Documentable[]][]
+  var res = [] as Documentable[]
 
   for (var exp of decls) {
 
@@ -61,18 +62,25 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
     var full_name = prefix ? `${prefix}.${name}` : name
     var d = [] as ts.ExportedDeclarations[]
 
-    if (bl.filter(b => b instanceof ts.FunctionDeclaration).length > 1) {
-      var i = bl.length - 1
-      findfn: while (i >= 0) {
-        if (bl[i] instanceof ts.FunctionDeclaration) {
-          bl.splice(i, 1)
-          break findfn
-        }
-        i--
-      }
+    var fns = bl.filter(b => b instanceof ts.FunctionDeclaration)
+
+    // if there are overloads, ignore the base one since the rest are
+    // the api.
+    if (fns.length > 1) {
+      fns.splice(fns.length - 1, 1)
     }
+    if (fns.length > 0)
+      res.push(new Documentable(full_name, fns))
 
     for (var node of bl) {
+      if (node instanceof ts.ClassDeclaration
+        || node instanceof ts.EnumDeclaration
+        || node instanceof ts.InterfaceDeclaration
+        || node instanceof ts.VariableDeclaration
+        || node instanceof ts.TypeAliasDeclaration)
+      {
+        res.push(new Documentable(full_name, [node]))
+      }
       if (node instanceof ts.NamespaceDeclaration || node instanceof ts.SourceFile) {
         // const st = node.getStructure()
         res = [...res, ...handleExportedDeclarations(node.getExportedDeclarations(), full_name)]
@@ -81,16 +89,40 @@ function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclar
       }
     }
 
-    if (d.length)
-      res.push([full_name, d as Documentable[]])
+    // if (d.length)
+    //   res.push([full_name, d as Documentable[]])
   }
   return res
 }
 
 // CETTE FONCTION FAIT LE CAFÉ !!!
-const res = handleExportedDeclarations(src.getExportedDeclarations())
-res.sort()
 
+function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
+  return function (a, b) {
+    var e_a = ex(a)
+    var e_b = ex(b)
+    if (e_a < e_b) return -1
+    if (e_a > e_b) return 1
+    return 0
+  }
+}
+
+const res = handleExportedDeclarations(src.getExportedDeclarations())
+res.sort(sorter(a => a.name))
+
+var map = new MapArray<string, Documentable>()
+for (var r of res) {
+  for (var tag of r.tags)
+    map.add(tag, r)
+}
+
+for (var _ of map.entries()) {
+  // console.log(_[0], _[1].map(d => d.name))
+}
+// console.log(map)
+// res.forEach(d => console.log([d.name, d.kind, d.tags]))
+
+/**
 function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
   return function (a, b) {
     var e_a = ex(a)
@@ -123,6 +155,19 @@ const method_sorter = sorter<ts.ClassMemberTypes | ts.TypeElementTypes | ts.Comm
   return '6-' + name
 })
 
+function kind(v: Documentable[]) {
+  var first = v[0]
+  if (first instanceof ts.ClassDeclaration)
+    return css.kind_class
+  if (first instanceof ts.InterfaceDeclaration)
+    return css.kind_interface
+  if (first instanceof ts.TypeAliasDeclaration)
+    return css.kind_typealias
+  if (first instanceof ts.FunctionDeclaration)
+    return css.kind_function
+  return css.kind_var
+}
+
 // FIXME sort members !
 // Filter out private or internal fields
 // Treat static members as variable declarations.
@@ -133,10 +178,10 @@ class Test extends Part {
     this.base.title = 'elt documentation'
      this.body.push(() => <div class='st-row'>
        <div class='st-toc'>
-        {res.map(([name, syms]) => <div>{name}</div>)}
+        {res.filter(f => !f[0].includes('.')).map(([name, syms]) => <a class={kind(syms)} href={`#${name}`}>{name.includes('.') ? name : <b>{name}</b>}</a>)}
        </div>
-       <div class='st-doc'>
-      {res.map(([name, syms]) => <div class={css.block}>
+       <div class='st-docmain'>
+      {res.map(([name, syms]) => <div class={css.block} id={name}>
         {syms.map(t =>
           t instanceof ts.FunctionDeclaration ? <FnProto name={name} proto={t}/> :
           t instanceof ts.ClassDeclaration ? <>
@@ -144,8 +189,8 @@ class Test extends Part {
             {Repeat(t.getMembersWithComments().filter(m => {
               if (m instanceof ts.CommentClassElement) return false
               var modifiers = m.getModifiers().map(m => m.getText())
-              var docs = m.getJsDocs()
-              console.log(docs.map(d => d.getTags().map(t => t.getText())))
+              // var docs = m.getJsDocs()
+              // console.log(docs.map(d => d.getTags().map(t => t.getText())))
               // readonly static protected public private
               if(modifiers.includes('private') || modifiers.includes('static') || modifiers.includes('protected'))
                 return false
@@ -172,3 +217,4 @@ var t = new Test()
 t.init()
 import * as fs from 'fs'
 t.get(Base).Main().render(fs.createWriteStream('./out/doc.html'))
+*/

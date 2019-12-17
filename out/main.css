@@ -119,6 +119,17 @@ pre {
   padding: 16px;
   overflow: auto;
   width: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  text-decoration: none;
+  color: rgb(var(--st-primary));
+}
+
+a:hover {
+  background: rgba(var(--st-primary), 0.1);
 }
 
 .st-docmain {

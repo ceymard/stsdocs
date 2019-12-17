@@ -208,16 +208,13 @@ export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
 }
 
 
+function resolve_type(v: ts.ParameterDeclaration | ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature) {
+  return v.getTypeNode() ?? v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!) ?? v.getType()
+}
+
+
 export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name?: string}) {
-  // console.log('SYM', v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!))
-  function resolve() {
-    var d = v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!)
-    return d
-    // if (!d) return null
-    // console.log('RESOLVIN', d.getText(), d.getSymbol()?.getDeclarations().map(d => d.constructor.name))
-    return d
-  }
-  return <span><b>{name ?? v.getName()}</b>: <Type type={v.getTypeNode() ?? resolve() ?? v.getType()}/></span>
+  return <span><b>{name ?? v.getName()}</b>: <Type type={resolve_type(v)}/></span>
 }
 
 export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name: string, kind?: string}) {
@@ -228,6 +225,15 @@ export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.Prope
   } else if (v instanceof ts.PropertyDeclaration || v instanceof ts.PropertySignature) {
     mod = ''
   }
+
+  // If this is a const function, output it as a function.
+  if (mod === 'const') {
+    var resolved = resolve_type(v)
+    // console.log(name, resolved.constructor.name)
+    if (resolved instanceof ts.FunctionTypeNode)
+      return <FnProto name={name} proto={resolved}/>
+  }
+
   return <div class={css.kind_var}>
     <div class={css.name}><span class={css.kind}>{mod}</span><ParamOrVar v={v} name={name}/></div>
   </div>
@@ -252,7 +258,7 @@ export function FnArgs(a: Attrs & { params: ts.ParameterDeclaration }) {
   return <></>
 }
 
-export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature, name: string, kind?: string}) {
+export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature | ts.CallSignatureDeclaration | ts.FunctionTypeNode, name: string, kind?: string}) {
   var fn = a.proto
 
   return <div class={css.kind_function}>
@@ -298,7 +304,10 @@ export function ClassMember({member}: Attrs & {member: ts.ClassMemberTypes | ts.
     return <FnProto name={member.getName()} proto={member} kind=''/>
   if (member instanceof ts.ConstructorDeclaration || member instanceof ts.ConstructSignatureDeclaration)
     return <FnProto name='new ' proto={member} kind=''/>
+  if (member instanceof ts.CallSignatureDeclaration)
+    return <FnProto name='' proto={member} kind=''/>
   if (member instanceof ts.PropertyDeclaration || member instanceof ts.PropertySignature)
     return <VarDecl name={member.getName()} v={member} kind=''/>
   return <div>{member.constructor.name}</div>
 }
+

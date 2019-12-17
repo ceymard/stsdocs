@@ -86,10 +86,10 @@ export class Documentable {
   ) {
     this.parse()
 
-    this.withClass((name, c) => {
+    this.withInterface((name, c) => {
       console.log(name, c.getName())
       this.members.forEach(m => {
-        console.log([m.name, m.modifiers])
+        console.log([m.kind, m.name, m.modifiers])
       })
     })
   }
@@ -124,7 +124,6 @@ export class Documentable {
         } catch (e) {
           return `file not found: "${try_path}"`
         }
-        return 'PATH'
       })
     this.docs = clean
     this.tags = tags
@@ -191,6 +190,10 @@ export class Documentable {
       return 'variable'
     if (I(f, ts.TypeAliasDeclaration))
       return 'type'
+    if (I(f, ts.ConstructSignatureDeclaration) || I(f, ts.ConstructorDeclaration))
+      return 'constructor'
+    if (I(f, ts.PropertyDeclaration) || I(f, ts.PropertySignature))
+      return 'prop'
     return '???'
   }
 
