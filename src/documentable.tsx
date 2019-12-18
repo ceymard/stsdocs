@@ -6,7 +6,7 @@ function clean_comment(comment: string) {
   return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]*)/gm, '')
 }
 
-function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
+export function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
   return function (a, b) {
     var e_a = ex(a)
     var e_b = ex(b)
@@ -74,7 +74,7 @@ interface IHasModifiers {
   getModifiers(): ts.Node[]
 }
 
-function hasModifiers(v: any): v is IHasModifiers {
+export function hasModifiers(v: any): v is IHasModifiers {
   return 'getModifiers' in v
 }
 
@@ -83,18 +83,24 @@ function hasModifiers(v: any): v is IHasModifiers {
 
 export class Documentable {
 
+  static name_map = new Map<ts.Node, string>()
+
   docs = ''
   modifiers = new Set<string>() // const, static, public, async, protected ... only valid for methods and properties
+  categories = new Set<string>()
   tags = new Set<string>()
 
   constructor(
     public name: string,
     public declarations: DocumentableTypes[] = []
   ) {
+    for (var d of declarations)
+      Documentable.name_map.set(d, name)
     this.parse()
   }
 
   parse() {
+    var categories = new Set<string>()
     var tags = new Set<string>()
     var first = this.declarations[0]
     var src_path = first.getSourceFile().getFilePath()
@@ -108,13 +114,18 @@ export class Documentable {
     var clean = clean_comment(
       this.declarations.map(d => {
       var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d instanceof ts.SourceFile ? null : d.getJsDocs()
-      return (dc ?? []).map(d => d.getText())
+      return (dc ?? []).map(d => {
+        for (var t of d.getTags()) {
+          tags.add(t.getTagName())
+        }
+        return d.getText()
+      })
     }).join('\n\n').trim())
       .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
       .replace(/@returns?/g, () => ` - **returns**`)
       .replace(/@category ([^\n]+)\n?/g, (_, cats: string) => {
         for (var c of cats.trim().split(/\n,\n/g))
-          tags.add(c.trim())
+          categories.add(c.trim())
         return ''
       })
       .replace(/@include\s*([^\n]+)\s*\n?/g, (_, path: string) => {
@@ -125,8 +136,10 @@ export class Documentable {
           return `file not found: "${try_path}"`
         }
       })
+
     this.docs = clean
     this.tags = tags
+    this.categories = categories
     return clean
   }
 
@@ -165,6 +178,7 @@ export class Documentable {
           // const st = node.getStructure()
           // res = [...res, ...handleExportedDeclarations(node.getExportedDeclarations(), full_name)]
         } else if (!(node instanceof ts.FunctionDeclaration)) {
+
           console.log(node.constructor.name, 'not handled')
         }
       }
@@ -302,9 +316,11 @@ export class Documentable {
     if (
       first instanceof ts.VariableDeclaration ||
       first instanceof ts.PropertyDeclaration ||
-      first instanceof ts.PropertySignature
+      first instanceof ts.PropertySignature ||
+      first instanceof ts.GetAccessorDeclaration ||
+      first instanceof ts.SetAccessorDeclaration
     )
-      this.declarations as VariableTypes[]
+      return first as VariableTypes
     return null
   }
 
@@ -338,7 +354,7 @@ export class Documentable {
     return f ? fn(f) : null
   }
 
-  withVariable<T>(fn: (name: string, t: ts.VariableDeclaration) => T): T | null {
+  withVariable<T>(fn: (name: string, t: VariableTypes) => T): T | null {
     var f = this.variable
     return f ? fn(this.name, f) : null
   }
@@ -346,6 +362,11 @@ export class Documentable {
   withEnum<T>(fn: (name: string, t: ts.EnumDeclaration) => T): T | null {
     var f = this.enum
     return f ? fn(this.name, f) : null
+  }
+
+  withMembers<T>(fn: (members: Documentable[]) => T): T | null {
+    var m = this.members
+    return m.length > 0 ? fn(m) : null
   }
 
 }

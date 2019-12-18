@@ -1,32 +1,14 @@
 import * as ts from 'ts-morph'
 import { Attrs, s, raw, If, Repeat, Child } from 'stsx';
 import css from './css'
-import * as pth from 'path'
-import * as fs from 'fs'
+import { VariableTypes, Documentable, hasModifiers } from './documentable';
 
-import * as m from 'markdown-it'
-// import * as h from 'highlight.js'
-import * as prism from 'prismjs'
-require('prismjs/components/prism-jsx.min')
-
-var md = m({
-  highlight: (str, lang) => {
-    try {
-      return prism.highlight(str, prism.languages.jsx, 'jsx')
-      // return h.highlight(lang, str).value;
-    } catch (__) {}
-
-    return ''; // use external default escaping
-  }
-})
-
-function clean_comment(comment: string) {
-  return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]*)/gm, '')
-}
 
 function T(typ: ts.TypeNode | ts.Type | ts.Expression | undefined | null) {
   return <Type type={typ}/>
 }
+
+
 export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expression | undefined | null}) {
   if (!type) return raw('')
   if (type instanceof ts.Type) {
@@ -82,7 +64,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
         // console.log(ta.map(a => a.constructor.name))
         // ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
         // THERE IS A LINK HERE AS WELL !
-        return <span><b>{first.getName()}</b>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
+        return <span><a href={'#' + (Documentable.name_map.get(first) ?? first.getName())}>{first.getName()}</a>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
       }
 
       // FIXME
@@ -110,7 +92,9 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       return <span class={css.type}>{type.getParameterNameNode().getText()} is <Type type={type.getTypeNode()}/></span>
     } else if (ts.Node.isTypeReferenceNode(type)) {
       // THIS IS WHERE WE CREATE A LINK !
-      return <span>{type.getTypeName().getText()}<TypeArgs ts={type.getTypeArguments()}/></span>
+      var resolved = type.getType().getSymbol()?.getDeclarations()[0] ?? type.getType().getSymbol()?.getValueDeclaration()
+      var typename = type.getTypeName().getText()
+      return <a href={`#${Documentable.name_map.get(resolved!) ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments()}/></a>
       // console.log(type.getType())
     } else if (ts.Node.isFunctionTypeNode(type)) {
       return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>
@@ -142,7 +126,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       // type.getIndexSignatures()
     return <span class={css.type}>{'{'} {Repeat(type.getIndexSignatures(), sig => <>[<Type type={sig.getKeyTypeNode()}/>]: <Type type={sig.getReturnTypeNode()}/></>, ', ')} {Repeat(type.getProperties(), p => <>{p.getName()}{p.getQuestionTokenNode() ? '?' : ''}: <Type type={p.getTypeNode()}/></>, ', ')} {'}'}</span>
     }
-  } else if (ts.Node.isExpression(type) || ['void', 'any', 'never'].includes(type.getText().trim())) {
+  } else if (ts.Node.isExpression(type) || ['void', 'any', 'never'].includes((type as any).getText().trim())) {
     return <span>{type.getText()}</span>
   }
 
@@ -169,20 +153,16 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
 
 
 export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, name: string}) {
-  return <div class={css.kind_typealias}>
-    <div class={css.name}>
-      <span class={css.kind}>type</span>
-    <b>{name}</b><TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/></div>
-  </div>
+  return <DocBlock class={css.kind_typealias} name={name} kind='T'>
+    <TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/>
+  </DocBlock>
 }
 
 
 export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string}) {
-  return <div class={css.kind_interface}>
-    <div class={css.name}>
-      <span class={css.kind}>interface</span>
-    <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/><ExpressionWithTypeArguments keyword=' extends' impl={a.cls.getExtends()}/></div>
-  </div>
+  return <DocBlock class={css.kind_interface} name={a.name} kind='I'>
+    <TypeParams ts={a.cls.getTypeParameters()}/><ExpressionWithTypeArguments keyword=' extends' impl={a.cls.getExtends()}/>
+  </DocBlock>
 }
 
 export function ExpressionWithTypeArguments({impl, keyword}: Attrs & {impl: ts.ExpressionWithTypeArguments[] | ts.ExpressionWithTypeArguments | undefined, keyword: string}) {
@@ -198,25 +178,22 @@ export function Kind(a: Attrs, ch: Child) {
 }
 
 export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
-  return <div class={css.kind_class}>
-    <div class={css.name}>
-    <Kind>class</Kind>
-      {/* <span class={css.kind}>class</span> */}
-  <b>{a.name}</b><TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/></div>
-  </div>
+  return <DocBlock class={css.kind_class} name={a.name} kind='C'>
+    <TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/>
+  </DocBlock>
 }
 
 
-function resolve_type(v: ts.ParameterDeclaration | ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature) {
-  return v.getTypeNode() ?? v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!) ?? v.getType()
+function resolve_type(v: ts.ParameterDeclaration | VariableTypes) {
+  return v?.getTypeNode() ?? v.getSymbol()?.getTypeAtLocation(v.getSymbol()?.getValueDeclaration()!) ?? v.getType()
 }
 
 
-export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name?: string}) {
+export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | VariableTypes, name?: string}) {
   return <span><b>{name ?? v.getName()}</b>: <Type type={resolve_type(v)}/></span>
 }
 
-export function VarDecl({v, name}: Attrs & {v: ts.VariableDeclaration | ts.PropertyDeclaration | ts.PropertySignature, name: string, kind?: string}) {
+export function VarDecl({v, name}: Attrs & {v: VariableTypes, name: string, kind?: string}) {
   var mod = 'const'
   const p = v.getParent()
   if (p instanceof ts.VariableDeclarationList && p.getText().startsWith('var')) {
@@ -253,60 +230,21 @@ export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
   return If(ts.length > 0, () => <>&lt;{Repeat(ts, typ => <Type type={typ}/>, ', ')}&gt;</>)
 }
 
-export function FnArgs(a: Attrs & { params: ts.ParameterDeclaration }) {
-  return <></>
-}
 
 export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature | ts.CallSignatureDeclaration | ts.FunctionTypeNode, name: string, kind?: string}) {
   var fn = a.proto
+  var mods = hasModifiers(a.proto) ? ' ' + a.proto.getModifiers().map(m => m.getText()).join(' ') + ' ' : ''
 
-  return <div class={css.kind_function}>
+  return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
+  </DocBlock>
+}
+
+
+export function DocBlock(a: Attrs & {name: string, kind?: string}, ch: Child[]) {
+  return <div>
     <div class={css.name}>
-      <span class={css.kind}>{a.kind ?? 'function'}</span>
-      <b>{a.name}</b><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/></div>
+      {If(a.kind, k => <span class={css.kind}>{k}</span>)}
+      <b>{a.name}</b>{ch}
+    </div>
   </div>
 }
-
-export function Docs({docs}: Attrs & {docs: Documentable[]}) {
-  var categories = new Set<string>()
-  var first = docs[0]
-  var src_path = first.getSourceFile().getFilePath()
-  var clean = clean_comment(
-    docs.map(d => {
-    var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d.getJsDocs()
-    return dc.map(d => d.getText())
-  }).join('\n\n').trim())
-    .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
-    .replace(/@returns?/g, () => ` - **returns**`)
-    .replace(/@category ([^\n]+)\n?/g, (_, cats: string) => {
-      for (var c of cats.trim().split(/\n,\n/g))
-        categories.add(c.trim())
-      return ''
-    })
-    .replace(/@include\s*([^\n]+)\s*\n?/g, (_, path: string) => {
-      var try_path = pth.join(pth.dirname(src_path), path)
-      try {
-        return fs.readFileSync(try_path, 'utf-8')
-      } catch (e) {
-        return `file not found: "${try_path}"`
-      }
-      return 'PATH'
-    })
-  var rendered = md.render(clean)
-  return <div class={css.doc}>{raw(rendered)}</div>
-}
-
-export function ClassMember({member}: Attrs & {member: ts.ClassMemberTypes | ts.ClassInstanceMemberTypes | ts.TypeElementTypes | ts.CommentClassElement | ts.CommentTypeElement}) {
-  if (member instanceof ts.CommentTypeElement || member instanceof ts.CommentClassElement)
-    return <></>
-  if (member instanceof ts.MethodDeclaration || member instanceof ts.MethodSignature)
-    return <FnProto name={member.getName()} proto={member} kind=''/>
-  if (member instanceof ts.ConstructorDeclaration || member instanceof ts.ConstructSignatureDeclaration)
-    return <FnProto name='new ' proto={member} kind=''/>
-  if (member instanceof ts.CallSignatureDeclaration)
-    return <FnProto name='' proto={member} kind=''/>
-  if (member instanceof ts.PropertyDeclaration || member instanceof ts.PropertySignature)
-    return <VarDecl name={member.getName()} v={member} kind=''/>
-  return <div>{member.constructor.name}</div>
-}
-

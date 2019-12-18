@@ -1,7 +1,7 @@
 import * as ts from 'ts-morph'
 import * as fs from 'fs'
 import { s, Child, raw } from 'stsx'
-import { Documentable } from './documentable'
+import { Documentable, sorter } from './documentable'
 import { Template } from './tpl'
 import css from './css'
 import { Class, Interface, FnProto, VarDecl, TypeAlias } from './widgets'
@@ -49,8 +49,25 @@ function coalesce_namespaces(doc: Documentable, res: Documentable[] = []) {
   return res
 }
 
+function Declaration({doc}: {doc: Documentable}) {
+  return <div class={css.block} id={doc.name}>
+    {doc.withClass((name, cls) => <Class name={name} cls={cls} />)}
+    {doc.withInterface((name, cls) => <Interface name={name} cls={cls} />)}
+    {doc.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'F' : fns[0] instanceof ts.MethodDeclaration ? 'M' : undefined}/>))}
+    {doc.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
+    {doc.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
+    <div class={css.doc}>{raw(md.render(doc.docs))}</div>
+
+    {doc.withMembers(members => <div class='st-nest'>
+      {members.map(m => <Declaration doc={m}/>)}
+    </div>)}
+
+  </div>
+}
+
 function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
   var all_declarations = coalesce_namespaces(doc)
+  all_declarations.sort(sorter(a => a.name))
 
   return <Template title={`${doc.sourcefile?.getFilePath() ?? ''} documentation`}>
     <div class='st-row'>
@@ -60,16 +77,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
           )}
        </div>
        <div class='st-docmain'>
-
-        {all_declarations.map(decl => <div class={css.block} id={decl.name}>
-          {decl.withClass((name, cls) => <Class name={name} cls={cls}/>)}
-          {decl.withInterface((name, cls) => <Interface name={name} cls={cls}/>)}
-          {decl.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f}/>))}
-          {decl.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
-          {decl.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
-          <div class={css.doc}>{raw(md.render(decl.docs))}</div>
-        </div>)}
-
+        {all_declarations.map(decl => <Declaration doc={decl}/>)}
        </div>
     </div>
   </Template>

@@ -8,11 +8,11 @@ body {
   font-family: 'Ubuntu', sans-serif;
   box-sizing: border-box;
   color: rgb(var(--st-primary));
-  --st-function: 129, 178, 252;
-  --st-class: 202, 166, 183;
-  --st-interface: 177, 176, 174;
+  --st-class: 129, 178, 252;
+  --st-interface: 202, 166, 183;
+  --st-typealias: 177, 176, 174;
   --st-primary: 255, 255, 255;
-  --st-typealias: 112, 192, 155;
+  --st-function: 112, 192, 155;
   --st-var: 240, 155, 117;
   --st-namespace: 186, 176, 136;
   --st-error: 255, 99, 99;
@@ -39,10 +39,12 @@ blockquote {
 
 .st-doc {
   font-weight: 300;
+  padding: 0 16px;
 }
 
 .st-block {
   position: relative;
+  padding: 16px 0;
   /* background-color: rgba(var(--st-primary), 0.06); */
 }
 
@@ -90,7 +92,6 @@ blockquote {
   color: rgba(var(--st-primary), 1);
   font-family: 'Ubuntu Mono', monospace;
   font-size: 18px;
-  margin-bottom: 9px;
 }
 
 .st-block ~ .st-block {
@@ -152,4 +153,8 @@ a:hover {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(var(--st-primary), 0.1);
+}
+
+.st-nest {
+  padding-left: 32px;
 }
