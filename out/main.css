@@ -94,9 +94,10 @@ blockquote {
   font-size: 18px;
 }
 
-.st-block ~ .st-block {
-  border-top: rgba(var(--st-primary), 0.07) 2px solid;
+.st-name + .st-name {
+  margin-top: 9px;
 }
+
 
 pre {
   background-color: rgba(var(--st-primary), 0.07);

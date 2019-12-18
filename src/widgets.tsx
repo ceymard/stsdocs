@@ -241,10 +241,8 @@ export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDec
 
 
 export function DocBlock(a: Attrs & {name: string, kind?: string}, ch: Child[]) {
-  return <div>
-    <div class={css.name}>
+  return <div class={css.name}>
       {If(a.kind, k => <span class={css.kind}>{k}</span>)}
       <b>{a.name}</b>{ch}
-    </div>
   </div>
 }
