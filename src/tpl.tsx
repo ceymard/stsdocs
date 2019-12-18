@@ -1,28 +1,86 @@
-import { s, raw, If, Part } from 'stsx'
+import { s, raw, If, Component, Child, STSXNode } from 'stsx'
+import { MapArray } from './documentable';
 
-class Ga extends Part {
-  key = ''
+export type BlockInstantiator<T> = {new (...a: any[]): Block<T>, children: Child[]}
+const block_children_map = new MapArray<BlockInstantiator<any>, Child[]>()
 
-  base = this.use(Base) as Base
+export class Block<A> extends Component<A> {
 
-  init() {
-    this.body.push(() => If(this.key, () => <>
-      {raw(`<!-- Google Analytics -->`)}
-      <script>
-        {raw(`(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-        })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');`)}
+  static children = [] as Child[][]
 
-        ga('create', '{this.key}', 'auto');
-        ga('send', 'pageview');
-      </script>
-      {raw(`<!-- End Google Analytics -->`)}
-    </>))
+  mount(node: STSXNode) {
+    const t = node.query(Template)
+    if (!t) return
+    // look in blocks and register itself. the last one to speak is usually
+    // the first one defined.
   }
+
+  render(ch: Child[]) {
+    block_children_map.add(this.constructor as any, ch)
+    return <></>
+  }
+
 }
 
 
+export class DisplayBlock extends Component<{
+  block: {new (a: any): Block<any>}
+  concatenate?: boolean
+}> {
+  render() {
+    const cons = this.attrs.block as any
+    const children = block_children_map.get(cons)
+    if (!children) return <></>
+
+    block_children_map.set(cons, [])
+    if (this.attrs.concatenate)
+      return <>{children}</>
+    return <>{children[0]}</>
+  }
+}
+
+export class MoreHead extends Block<{}> { }
+export class MoreBody extends Block<{}> { }
+export class TestBlock extends Block<{}> { }
+
+export class Template extends Component<{
+  title?: string
+  lang?: string
+  description?: string
+}> {
+
+  render(ch: Child[]) {
+    return <>{raw(`<!doctype html>`)}
+      <html lang={this.attrs.lang ?? 'en'}>
+        <head>
+          <title>{this.attrs.title ?? 'TITLE MISSING'}</title>
+          <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+          <link rel="stylesheet" href="./main.css"/>
+          <link rel="stylesheet" href="./css/all.min.css"/>
+          {If(this.attrs.description, desc => <meta name='description' content={desc}/>)}
+          <DisplayBlock block={MoreHead} concatenate/>
+        </head>
+        <body>
+          {ch}
+          <DisplayBlock block={MoreBody} concatenate/>
+
+          <DisplayBlock block={TestBlock}></DisplayBlock>
+        </body>
+      </html>
+    </>
+  }
+}
+
+function TplWithToc() {
+  return <Template title='Base title'>
+    <MoreHead>
+      <link/>
+    </MoreHead>
+  </Template>
+}
+// console.log(<TplWithToc/>)
+
+/*
 export class Base extends Part {
   title = 'Base title'
 
@@ -55,7 +113,7 @@ export class Base extends Part {
 export class Toc extends Part {
   base = this.use(Base)
 }
-
+*/
 // var b = new Base()
 //   .setPart(Ga, {key: 'UA-348383-1'})
 // console.log(b.get(Base).Main())//.render(process.stdout)

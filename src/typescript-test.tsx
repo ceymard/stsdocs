@@ -1,124 +1,86 @@
 import * as ts from 'ts-morph'
-import { Documentable, MapArray } from './documentable'
-// import { s, Part, Repeat } from 'stsx'
-// import { Base } from './tpl'
-// import css from './css'
-// import { Class, FnProto, Interface, TypeAlias, VarDecl, ClassMember } from './widgets'
+import * as fs from 'fs'
+import { s, Child, raw } from 'stsx'
+import { Documentable } from './documentable'
+import { Template } from './tpl'
+import css from './css'
+import { Class, Interface, FnProto, VarDecl, TypeAlias } from './widgets'
 
-// process.chdir('/home/chris/swapp/optdeps/elt')
+// markdown
+import * as m from 'markdown-it'
+// import * as h from 'highlight.js'
+import * as prism from 'prismjs'
+require('prismjs/components/prism-jsx.min')
+
+var md = m({
+  highlight: (str, lang) => {
+    try {
+      return prism.highlight(str, prism.languages.jsx, 'jsx')
+      // return h.highlight(lang, str).value;
+    } catch (__) {}
+
+    return ''; // use external default escaping
+  }
+})
+
+
+
 const p = new ts.Project({
   tsConfigFilePath: `${process.argv[2]}/tsconfig.json`
 })
 // p.addSourceFileAtPath('/home/chris/swapp/optdeps/elt-ui/src/index.ts')
 const src = p.getSourceFile('index.ts')!
 
-// I want the objects marked as @api to be shown at the root of the documentation.
-// the rest should be explored as the links get clicked.
+var doc = new Documentable('', [src])
 
-// console.log(src.getExportDeclarations().map(e => e.getText()))
-// console.log(src.getExportAssignments().map(e => e.getText()))
+// const res = handleExportedDeclarations(src.getExportedDeclarations())
+// res.sort(sorter(a => a.name))
 
-// What we should handle :
-// Variable
-// Function
-// Class
-// Enum
-// TypeAlias
-// Interface
-// Namespace (which contains the rest) | Modules
-// missing Expression, probably in the case of default exports
+// var map = new MapArray<string, Documentable>()
 
-
-// All the nodes that are to be rendered.
-// path is the symbol or the namespace-qualified name
-// export const rendered = new Map<string, {
-//   nodes: ts.Node[],
-//   path: string // the path to the output file corresponding to the single-doc page.
-// }>()
-
-
-// export const DocumentableTypes = [
-//   ts.ClassDeclaration,
-//   ts.InterfaceDeclaration,
-//   ts.FunctionDeclaration,
-//   ts.NamespaceDeclaration,
-//   ts.VariableDeclaration,
-//   ts.EnumDeclaration,
-//   ts.TypeAliasDeclaration
-// ] as const
-
-// // All the symbols we are going to provide documentation for.
-// export type Documentable = { getJsDocs(): ts.JSDoc[], getSourceFile(): ts.SourceFile }
-
-export const documented_symbols = [] as Documentable[]
-
-
-function handleExportedDeclarations(decls: ReadonlyMap<string, ts.ExportedDeclarations[]>, prefix = '') {
-  var res = [] as Documentable[]
-
-  for (var exp of decls) {
-
-    var [name, bl] = exp
-    var full_name = prefix ? `${prefix}.${name}` : name
-    var d = [] as ts.ExportedDeclarations[]
-
-    var fns = bl.filter(b => b instanceof ts.FunctionDeclaration)
-
-    // if there are overloads, ignore the base one since the rest are
-    // the api.
-    if (fns.length > 1) {
-      fns.splice(fns.length - 1, 1)
+function coalesce_namespaces(doc: Documentable, res: Documentable[] = []) {
+  for (var d of doc.exports) {
+    if (d.namespace) {
+      coalesce_namespaces(d, res)
+    } else {
+      res.push(d)
     }
-    if (fns.length > 0)
-      res.push(new Documentable(full_name, fns))
-
-    for (var node of bl) {
-      if (node instanceof ts.ClassDeclaration
-        || node instanceof ts.EnumDeclaration
-        || node instanceof ts.InterfaceDeclaration
-        || node instanceof ts.VariableDeclaration
-        || node instanceof ts.TypeAliasDeclaration)
-      {
-        res.push(new Documentable(full_name, [node]))
-      }
-      if (node instanceof ts.NamespaceDeclaration || node instanceof ts.SourceFile) {
-        // const st = node.getStructure()
-        res = [...res, ...handleExportedDeclarations(node.getExportedDeclarations(), full_name)]
-      } else {
-        d.push(node)
-      }
-    }
-
-    // if (d.length)
-    //   res.push([full_name, d as Documentable[]])
   }
   return res
 }
 
-// CETTE FONCTION FAIT LE CAFÉ !!!
+function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
+  var all_declarations = coalesce_namespaces(doc)
 
-function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
-  return function (a, b) {
-    var e_a = ex(a)
-    var e_b = ex(b)
-    if (e_a < e_b) return -1
-    if (e_a > e_b) return 1
-    return 0
-  }
+  return <Template title={`${doc.sourcefile?.getFilePath() ?? ''} documentation`}>
+    <div class='st-row'>
+       <div class='st-toc'>
+          {all_declarations.map(e =>
+            <a class={'st-kind-' + e.kind} href={`#${e.name}`}>{e.name.includes('.') ? e.name : <b>{e.name}</b>}</a>
+          )}
+       </div>
+       <div class='st-docmain'>
+
+        {all_declarations.map(decl => <div class={css.block} id={decl.name}>
+          {decl.withClass((name, cls) => <Class name={name} cls={cls}/>)}
+          {decl.withInterface((name, cls) => <Interface name={name} cls={cls}/>)}
+          {decl.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f}/>))}
+          {decl.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
+          {decl.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
+          <div class={css.doc}>{raw(md.render(decl.docs))}</div>
+        </div>)}
+
+       </div>
+    </div>
+  </Template>
 }
 
-const res = handleExportedDeclarations(src.getExportedDeclarations())
-res.sort(sorter(a => a.name))
+var t = (<DocTemplate doc={doc}></DocTemplate>)
+t.render(fs.createWriteStream('./out/doc.html'))
 
-var map = new MapArray<string, Documentable>()
-for (var r of res) {
-  for (var tag of r.tags)
-    map.add(tag, r)
-}
-
-for (var _ of map.entries()) {
-  // console.log(_[0], _[1].map(d => d.name))
-}
+// for (var _ of map.entries()) {
+//   // console.log(_[0], _[1].map(d => d.name))
+// }
 // console.log(map)
 // res.forEach(d => console.log([d.name, d.kind, d.tags]))
 

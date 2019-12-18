@@ -45,6 +45,7 @@ export type VariableTypes =
 
 
 export type DocumentableTypes =
+  ts.SourceFile |
   ts.ClassDeclaration |
   ts.InterfaceDeclaration |
 
@@ -58,6 +59,12 @@ export type DocumentableTypes =
 
   ts.EnumDeclaration |
   ts.TypeAliasDeclaration
+
+// const sorting_order = [
+//   ts.ClassDeclaration,
+//   ts.InterfaceDeclaration,
+//   ts.VariableDeclaration
+// ]
 
 function I(v: any, b: any): v is InstanceType<typeof b> {
   return v instanceof b
@@ -85,13 +92,6 @@ export class Documentable {
     public declarations: DocumentableTypes[] = []
   ) {
     this.parse()
-
-    this.withInterface((name, c) => {
-      console.log(name, c.getName())
-      this.members.forEach(m => {
-        console.log([m.kind, m.name, m.modifiers])
-      })
-    })
   }
 
   parse() {
@@ -107,8 +107,8 @@ export class Documentable {
 
     var clean = clean_comment(
       this.declarations.map(d => {
-      var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d.getJsDocs()
-      return dc.map(d => d.getText())
+      var dc = d instanceof ts.VariableDeclaration ? ((d.getParent() as ts.VariableDeclarationList).getParent() as ts.VariableStatement).getJsDocs() : d instanceof ts.SourceFile ? null : d.getJsDocs()
+      return (dc ?? []).map(d => d.getText())
     }).join('\n\n').trim())
       .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
       .replace(/@returns?/g, () => ` - **returns**`)
@@ -128,6 +128,49 @@ export class Documentable {
     this.docs = clean
     this.tags = tags
     return clean
+  }
+
+  get exports() {
+    var me = this.namespace ?? this.sourcefile
+    if (!me) return []
+
+    var res = [] as Documentable[]
+
+    for (var exp of me.getExportedDeclarations()) {
+
+      var [name, bl] = exp
+      var full_name = this.name ? `${this.name}.${name}` : name
+
+      var fns: ts.FunctionDeclaration[] = bl.filter((b: ts.ExportedDeclarations) => b instanceof ts.FunctionDeclaration)
+
+      // if there are overloads, ignore the base one since the rest are
+      // the api.
+      if (fns.length > 1) {
+        fns.splice(fns.length - 1, 1)
+      }
+      if (fns.length > 0)
+        res.push(new Documentable(full_name, fns))
+
+      for (var node of bl) {
+        if (node instanceof ts.ClassDeclaration
+          || node instanceof ts.EnumDeclaration
+          || node instanceof ts.InterfaceDeclaration
+          || node instanceof ts.VariableDeclaration
+          || node instanceof ts.TypeAliasDeclaration
+          || node instanceof ts.NamespaceDeclaration
+        )
+        {
+          res.push(new Documentable(full_name, [node]))
+        } else if (node instanceof ts.SourceFile) {
+          // const st = node.getStructure()
+          // res = [...res, ...handleExportedDeclarations(node.getExportedDeclarations(), full_name)]
+        } else if (!(node instanceof ts.FunctionDeclaration)) {
+          console.log(node.constructor.name, 'not handled')
+        }
+      }
+    }
+    return res
+
   }
 
   get members() {
@@ -158,6 +201,7 @@ export class Documentable {
 
     members_with_names.sort(sorter(m => m[0]))
     var grouped_members = new MapArray<string, DocumentableTypes>()
+    // @ts-ignore
     for (const [_, name, item] of members_with_names) {
       grouped_members.add(name, item)
     }
@@ -168,8 +212,6 @@ export class Documentable {
     }
 
     return res
-    // console.log(members_with_names.map(m => m[1]))
-    // we will have to group the methods by name, since they are just the same symbol in JS.
   }
 
   get kind() {
@@ -215,7 +257,7 @@ export class Documentable {
       first instanceof ts.CallSignatureDeclaration ||
       first instanceof ts.FunctionTypeNode
     )
-      this.declarations as FunctionTypes[]
+      return this.declarations as FunctionTypes[]
     return null
   }
 
@@ -243,6 +285,11 @@ export class Documentable {
   get enum() {
     // @ts-ignore
     return this.as(ts.EnumDeclaration)
+  }
+
+  get sourcefile() {
+    // @ts-ignore
+    return this.as(ts.SourceFile)
   }
 
   get namespace() {
@@ -284,6 +331,11 @@ export class Documentable {
   withNamespace<T>(fn: (name: string, t: ts.NamespaceDeclaration) => T): T | null {
     var f = this.namespace
     return f ? fn(this.name, f) : null
+  }
+
+  withSourceFile<T>(fn: (t: ts.SourceFile) => T): T | null {
+    var f = this.sourcefile
+    return f ? fn(f) : null
   }
 
   withVariable<T>(fn: (name: string, t: ts.VariableDeclaration) => T): T | null {

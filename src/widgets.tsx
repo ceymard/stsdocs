@@ -9,7 +9,6 @@ import * as m from 'markdown-it'
 import * as prism from 'prismjs'
 require('prismjs/components/prism-jsx.min')
 
-import { Documentable } from './typescript-test';
 var md = m({
   highlight: (str, lang) => {
     try {
