@@ -4,6 +4,18 @@ html, body {
   background-color: rgb(var(--st-bg));
 }
 
+h1 {
+  font-size: 1.5em;
+}
+
+h2 {
+  font-size: 1.3em;
+}
+
+h3 {
+  font-size: 1.1em;
+}
+
 body {
   font-family: 'Ubuntu', sans-serif;
   box-sizing: border-box;
@@ -195,4 +207,9 @@ a:hover {
 .flex-absolute-grow {
   flex-basis: 0;
   flex-grow: 1;
+}
+
+pre {
+  overflow: visible !important;
+  max-width: 1024px;
 }

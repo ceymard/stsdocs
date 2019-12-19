@@ -26,9 +26,9 @@ var md = m({
 })
 
 
-
+const PROJECT_BASE = process.argv[2]
 const p = new ts.Project({
-  tsConfigFilePath: `${process.argv[2]}/tsconfig.json`
+  tsConfigFilePath: `${PROJECT_BASE}/tsconfig.json`
 })
 // p.addSourceFileAtPath('/home/chris/swapp/optdeps/elt-ui/src/index.ts')
 const src = p.getSourceFile('index.ts')!
@@ -99,14 +99,13 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
         </div>
       </div>
       <div class='st-docmain'>
+        {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')))}
         {all_declarations.map(decl => <Declaration doc={decl}/>)}
       </div>
     </div>
 
     <MoreHead>
-      <style>
-        {include('node_modules/prismjs/themes/prism-tomorrow.css')}
-      </style>
+      <style>{include('node_modules/prismjs/themes/prism-tomorrow.css')}</style>
     </MoreHead>
   </Template>
 }
