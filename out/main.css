@@ -1,13 +1,14 @@
 html, body {
   padding: 0; margin: 0;
   overflow: hidden;
-  background-color: #1c1c1b;
+  background-color: rgb(var(--st-bg));
 }
 
 body {
   font-family: 'Ubuntu', sans-serif;
   box-sizing: border-box;
   color: rgb(var(--st-primary));
+  --st-bg: 30, 30, 31;
   --st-class: 129, 178, 252;
   --st-interface: 202, 166, 183;
   --st-typealias: 177, 176, 174;
@@ -158,4 +159,11 @@ a:hover {
 
 .st-nest {
   padding-left: 32px;
+}
+
+.st-search {
+  background: rgba(var(--st-primary), 0.02);
+  border: 1px solid rgba(var(--st-primary), 0.14);
+  padding: 4px;
+  color: rgb(var(--st-primary));
 }

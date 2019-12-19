@@ -3,7 +3,7 @@ import * as pth from 'path'
 import * as fs from 'fs'
 
 function clean_comment(comment: string) {
-  return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]*)/gm, '')
+  return comment.replace(/^([ \t]*\/\*\*?[ \t]*|[ \t]*\*\/|[ \t]*\*[ \t]?)/gm, '')
 }
 
 export function sorter<T>(ex: (a: T) => string): (a: T, b: T) => -1 | 0 | 1 {
@@ -99,6 +99,13 @@ export class Documentable {
     this.parse()
   }
 
+  is<Types extends any[]>(...types: Types): boolean {
+    var first = this.declarations[0]
+    for (var t of types)
+      if (first instanceof t) return true
+    return false
+  }
+
   parse() {
     var categories = new Set<string>()
     var tags = new Set<string>()
@@ -107,8 +114,10 @@ export class Documentable {
 
     for (var d of this.declarations) {
       if (hasModifiers(d))
-        for (var m of d.getModifiers())
-          this.modifiers.add(m.getText().trim())
+        for (var m of d.getModifiers()) {
+          var mod = m.getText().trim()
+          if (mod !== 'export') this.modifiers.add(mod)
+        }
     }
 
     var clean = clean_comment(
@@ -136,6 +145,8 @@ export class Documentable {
           return `file not found: "${try_path}"`
         }
       })
+      .replace(/^\s*@[\w+][^\n]*\n*/g, '')
+      .replace(/`#([\w._]+)`/g, (m, sym) => `[\`${sym}\`](#${sym})`)
 
     this.docs = clean
     this.tags = tags
@@ -204,12 +215,12 @@ export class Documentable {
       else if (m instanceof ts.MethodDeclaration || m instanceof ts.PropertyDeclaration || m instanceof ts.GetAccessorDeclaration || m instanceof ts.SetAccessorDeclaration) {
         const mods = m.getModifiers().map(m => m.getText().trim())
         if (mods.includes('static'))
-          members_with_names.push(['4-' + m.getName(), 'static ' + m.getName(), m])
+          members_with_names.push(['4-' + m.getName(), `${this.name}.${m.getName()}`, m])
         else
-          members_with_names.push(['3-' + m.getName(), m.getName(), m])
+          members_with_names.push(['3-' + m.getName(), `.${m.getName()}`, m])
       } else {
         // get statics
-        members_with_names.push(['3-' + m.getName(), m.getName(), m])
+        members_with_names.push(['3-' + m.getName(), `.${m.getName()}`, m])
       }
     }
 

@@ -233,7 +233,7 @@ export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
 
 export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature | ts.CallSignatureDeclaration | ts.FunctionTypeNode, name: string, kind?: string}) {
   var fn = a.proto
-  var mods = hasModifiers(a.proto) ? ' ' + a.proto.getModifiers().map(m => m.getText()).join(' ') + ' ' : ''
+  var mods = hasModifiers(a.proto) ? ' ' + a.proto.getModifiers().map(m => m.getText()).filter(m => m !== 'export').join(' ') + ' ' : ''
 
   return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
   </DocBlock>
