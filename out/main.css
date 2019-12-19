@@ -52,12 +52,13 @@ blockquote {
 
 .st-doc {
   font-weight: 300;
-  padding: 0 16px;
+  padding: 8px;
+  background-color: rgba(var(--st-primary), 0.02);
 }
 
 .st-block {
   position: relative;
-  padding: 16px 0;
+  padding: 16px;
   /* background-color: rgba(var(--st-primary), 0.06); */
 }
 
@@ -157,6 +158,10 @@ a:hover {
   overflow: auto;
 }
 
+.st-docmain > .st-block {
+  margin-bottom: 64px;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -167,10 +172,6 @@ a:hover {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(var(--st-primary), 0.1);
-}
-
-.st-nest {
-  padding-left: 32px;
 }
 
 .st-search {

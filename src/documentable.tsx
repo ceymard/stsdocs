@@ -148,7 +148,7 @@ export class Documentable {
       .replace(/^\s*@[\w+][^\n]*\n*/g, '')
       .replace(/`#([\w._]+)`/g, (m, sym) => `[\`${sym}\`](#${sym})`)
 
-    this.docs = clean
+    this.docs = clean.trim()
     this.tags = tags
     this.categories = categories
     return clean
@@ -233,7 +233,8 @@ export class Documentable {
 
     var res: Documentable[] = []
     for (const [name, items] of grouped_members) {
-      res.push(new Documentable(name, items))
+      var d = new Documentable(name, items)
+      if (!d.tags.has('internal')) res.push(d)
     }
 
     return res

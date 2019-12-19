@@ -1,6 +1,6 @@
 import * as ts from 'ts-morph'
 import * as fs from 'fs'
-import { s, Child, raw, include } from 'stsx'
+import { s, Child, raw, include, If } from 'stsx'
 import { Documentable, sorter, MapArray } from './documentable'
 import { Template, MoreHead } from './tpl'
 import css from './css'
@@ -58,7 +58,7 @@ function Declaration({doc}: {doc: Documentable}) {
     {doc.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'F' : fns[0] instanceof ts.MethodDeclaration ? 'M' : undefined}/>))}
     {doc.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
     {doc.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
-    <div class={css.doc}>{raw(md.render(doc.docs))}</div>
+    {If(doc.docs, d => <div class={css.doc}>{raw(md.render(d))}</div>)}
 
     {doc.withMembers(members => <div class='st-nest'>
       {members.map(m => <Declaration doc={m}/>)}
@@ -105,7 +105,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
 
     <MoreHead>
       <style>
-        {include('node_modules/prismjs/themes/prism-okaidia.css')}
+        {include('node_modules/prismjs/themes/prism-tomorrow.css')}
       </style>
     </MoreHead>
   </Template>

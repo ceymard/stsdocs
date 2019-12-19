@@ -59,11 +59,9 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
     if (decls) {
       var first = decls[0]
       if (ts.Node.isClassDeclaration(first) || ts.Node.isInterfaceDeclaration(first)) {
-        // Problem : we lose the qualified name and mostly the type parameters.
-        var ta = type.getTypeArguments()
-        // console.log(ta.map(a => a.constructor.name))
-        // ta = ta.slice(0, -1) // apparently, they always include this as the last parameter.
-        // THERE IS A LINK HERE AS WELL !
+        // FIXME
+        // @ts-ignore
+        var ta = type.getTypeArguments().filter(t => !t.compilerType.isThisType)
         return <span><a href={'#' + (Documentable.name_map.get(first) ?? first.getName())}>{first.getName()}</a>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
       }
 
@@ -94,13 +92,17 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       // THIS IS WHERE WE CREATE A LINK !
       var resolved = type.getType().getSymbol()?.getDeclarations()[0] ?? type.getType().getSymbol()?.getValueDeclaration()
       var typename = type.getTypeName().getText()
-      return <a href={`#${Documentable.name_map.get(resolved!) ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments()}/></a>
+      return <a href={`#${Documentable.name_map.get(resolved!) ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments().filter(t => !ts.Node.isThisTypeNode(t))}/></a>
       // console.log(type.getType())
     } else if (ts.Node.isFunctionTypeNode(type)) {
       return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>
     } else if (ts.Node.isConditionalTypeNode(type)) {
       return <span class={css.type}><Type type={type.getCheckType()}/> extends <Type type={type.getExtendsType()}/> ? <Type type={type.getTrueType()}/> : <Type type={type.getFalseType()}/></span>
       // console.log('!!!', type.getText())
+    } else if (ts.Node.isThisTypeNode(type)) {
+      return <span>this</span>
+    } else if (ts.Node.isConstructorTypeNode(type)) {
+      return <span>new () => <Type type={type.getReturnTypeNode() ?? type.getReturnType()}/></span>
     } else if (ts.Node.isInferTypeNode(type)) {
       return <span>infer {type.getTypeParameter().getName()}</span>
     } else if (ts.Node.isIndexedAccessTypeNode(type)) {
