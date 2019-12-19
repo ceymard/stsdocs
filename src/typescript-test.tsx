@@ -1,8 +1,8 @@
 import * as ts from 'ts-morph'
 import * as fs from 'fs'
-import { s, Child, raw } from 'stsx'
+import { s, Child, raw, include } from 'stsx'
 import { Documentable, sorter, MapArray } from './documentable'
-import { Template } from './tpl'
+import { Template, MoreHead } from './tpl'
 import css from './css'
 import { Class, Interface, FnProto, VarDecl, TypeAlias } from './widgets'
 
@@ -10,12 +10,14 @@ import { Class, Interface, FnProto, VarDecl, TypeAlias } from './widgets'
 import * as m from 'markdown-it'
 // import * as h from 'highlight.js'
 import * as prism from 'prismjs'
-require('prismjs/components/prism-jsx.min')
+require('prismjs/components/')(['javascript', 'typescript', 'jsx', 'tsx'])
+
 
 var md = m({
   highlight: (str, lang) => {
     try {
-      return prism.highlight(str, prism.languages.jsx, 'jsx')
+      var res = prism.highlight(str, prism.languages.jsx, 'tsx')
+      return `<pre class='language-tsx'><code>${res}</code></pre>`
       // return h.highlight(lang, str).value;
     } catch (__) {}
 
@@ -85,19 +87,27 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
 
   return <Template title={`${doc.sourcefile?.getFilePath() ?? ''} documentation`}>
     <div class='st-row'>
-      <div class='st-toc'>
+      <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
-        {Array.from(by_categories.entries()).map(([category, declarations]) => <div>
-          <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
-          {declarations.map(e =>
-            <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}>{e.name.includes('.') ? e.name : <b>{e.name}</b>}</a></div>
-          )}
-        </div>)}
+        <div class='st-toc flex-absolute-grow'>
+          {Array.from(by_categories.entries()).map(([category, declarations]) => <div>
+            <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
+            {declarations.map(e =>
+              <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}</b></a></div>
+            )}
+          </div>)}
+        </div>
       </div>
       <div class='st-docmain'>
         {all_declarations.map(decl => <Declaration doc={decl}/>)}
       </div>
     </div>
+
+    <MoreHead>
+      <style>
+        {include('node_modules/prismjs/themes/prism-okaidia.css')}
+      </style>
+    </MoreHead>
   </Template>
 }
 

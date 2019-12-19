@@ -8,11 +8,23 @@ body {
   font-family: 'Ubuntu', sans-serif;
   box-sizing: border-box;
   color: rgb(var(--st-primary));
+  --st-bg: 255, 255, 255;
+  --st-primary: 10, 10, 11;
+  --st-class: 9, 132, 227;
+  --st-interface: 108, 92, 231;
+  --st-typealias: 99, 110, 114;
+  --st-function: 0, 184, 148;
+  --st-var: 225, 112, 85;
+  --st-namespace: 186, 176, 136;
+  --st-error: 214, 48, 49;
+}
+
+body.dark {
   --st-bg: 30, 30, 31;
+  --st-primary: 255, 255, 255;
   --st-class: 129, 178, 252;
   --st-interface: 202, 166, 183;
   --st-typealias: 177, 176, 174;
-  --st-primary: 255, 255, 255;
   --st-function: 112, 192, 155;
   --st-var: 240, 155, 117;
   --st-namespace: 186, 176, 136;
@@ -24,7 +36,7 @@ body {
   padding: 0 2px;
 }
 
-code {
+.st-doc p > code, .st-doc li > code {
   white-space: pre;
   background: rgba(var(--st-primary), 0.07);
   padding: 0 2px;
@@ -165,5 +177,21 @@ a:hover {
   background: rgba(var(--st-primary), 0.02);
   border: 1px solid rgba(var(--st-primary), 0.14);
   padding: 4px;
+  margin: 16px;
   color: rgb(var(--st-primary));
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex-absolute-grow {
+  flex-basis: 0;
+  flex-grow: 1;
 }

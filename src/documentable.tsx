@@ -133,7 +133,7 @@ export class Documentable {
       .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
       .replace(/@returns?/g, () => ` - **returns**`)
       .replace(/@category ([^\n]+)\n?/g, (_, cats: string) => {
-        for (var c of cats.trim().split(/\n,\n/g))
+        for (var c of cats.trim().split(/\s*,\s*/g))
           categories.add(c.trim())
         return ''
       })
@@ -254,13 +254,13 @@ export class Documentable {
     if (I(f, ts.EnumDeclaration))
       return 'enum'
     if (I(f, ts.VariableDeclaration))
-      return 'variable'
+      return 'var'
     if (I(f, ts.TypeAliasDeclaration))
-      return 'type'
+      return 'typealias'
     if (I(f, ts.ConstructSignatureDeclaration) || I(f, ts.ConstructorDeclaration))
       return 'constructor'
     if (I(f, ts.PropertyDeclaration) || I(f, ts.PropertySignature))
-      return 'prop'
+      return 'var'
     if (I(f, ts.CallSignatureDeclaration))
       return 'call'
     return '???'
