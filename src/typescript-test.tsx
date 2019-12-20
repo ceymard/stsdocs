@@ -100,6 +100,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
       </div>
       <div class='st-docmain'>
         {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')))}
+        <h1>API Documentation</h1>
         {all_declarations.map(decl => <Declaration doc={decl}/>)}
       </div>
     </div>
