@@ -90,9 +90,9 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
       <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
         <div class='st-toc flex-absolute-grow'>
-          {Array.from(by_categories.entries()).map(([category, declarations]) => <div>
+          {Array.from(by_categories.entries()).filter(c => c[0] !== 'toc').map(([category, declarations]) => <div>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
-            {declarations.map(e =>
+            {declarations.filter(d => d.categories.has('toc')).map(e =>
               <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}</b></a></div>
             )}
           </div>)}
@@ -106,7 +106,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     </div>
 
     <MoreHead>
-      <style>{include('node_modules/prismjs/themes/prism-tomorrow.css')}</style>
+      <style>{include('prismjs/themes/prism-tomorrow.css')}</style>
     </MoreHead>
   </Template>
 }
