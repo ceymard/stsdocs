@@ -221,12 +221,21 @@ export class Documentable {
           m instanceof ts.PropertyDeclaration,
         ].indexOf(true) + 3
 
-        if (mods.includes('static'))
-          members_with_names.push([`9${nb}-` + m.getName(), `${this.name}.${m.getName()}`, m])
-        else
-          members_with_names.push([`${nb}-` + m.getName(), `${m.getName()}`, m])
+        var is_static = mods.includes('static')
+        var sortkey = is_static ? `9${nb}-${m.getName()}` : `${nb}-${m.getName()}`
+        var name = is_static ? `${this.name}.${m.getName()}` : m.getName()
+        if (m instanceof ts.MethodDeclaration) {
+          var overloads = m.getOverloads()
+          if (overloads.length) {
+            for (var ov of overloads)
+              members_with_names.push([sortkey, name, ov])
+          } else {
+            members_with_names.push([sortkey, name, m])
+          }
+        } else {
+          members_with_names.push([sortkey, name, m])
+        }
       } else {
-        // get statics
         members_with_names.push(['3-' + m.getName(), `${m.getName()}`, m])
       }
     }

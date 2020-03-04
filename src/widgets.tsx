@@ -192,7 +192,8 @@ function resolve_type(v: ts.ParameterDeclaration | VariableTypes) {
 
 
 export function ParamOrVar({v, name}: Attrs & {v: ts.ParameterDeclaration | VariableTypes, name?: string}) {
-  return <span><b>{name ?? v.getName()}</b>: <Type type={resolve_type(v)}/></span>
+  var opt = v instanceof ts.ParameterDeclaration && v.isOptional() ? '?' : ''
+  return <span class={opt ? 'optional' : ''}><b>{name ?? v.getName()}</b>{opt}: <Type type={resolve_type(v)}/></span>
 }
 
 export function VarDecl({v, name}: Attrs & {v: VariableTypes, name: string, kind?: string}) {

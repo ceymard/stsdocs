@@ -23,10 +23,10 @@ body {
   --st-bg: 255, 255, 255;
   --st-primary: 10, 10, 11;
   --st-class: 75, 40, 130;
-  --st-interface: 46, 87, 147;
-  --st-typealias: 201, 97, 18;
-  --st-function: 23, 114, 69;
-  --st-var: 196, 167, 5;
+  --st-interface: 136, 14, 79;
+  --st-typealias: 0, 96, 100;
+  --st-function: 27, 94, 32;
+  --st-var: 230, 81, 0;
   --st-namespace: 196, 167, 5;
   --st-error: 214, 48, 49;
 }
@@ -64,7 +64,7 @@ code {
 blockquote {
   font-size: 0.8em;
   margin: 0;
-  padding-left: 8px;
+  padding: 8px;
   border-left: 8px solid rgba(var(--st-primary), 0.2);
   background-color: rgba(var(--st-primary), 0.07);
 }
@@ -78,7 +78,7 @@ blockquote {
 .st-block {
   position: relative;
   /* overflow: hidden; */
-  padding-bottom: 16px;
+  /* padding-bottom: 16px; */
   background-color: rgba(var(--st-primary), 0.06);
   /* border-radius: 3px; */
 }
@@ -196,11 +196,11 @@ a:hover {
 }
 
 .st-nest {
-  margin-top: 16px;
-  padding: 0 16px;
+  /* margin-top: 16px; */
+  padding: 16px;
 }
 
-.st-nest > .st-block {
+.st-nest > .st-block + .st-block {
   margin-top: 16px;
 }
 
@@ -250,4 +250,17 @@ a:hover {
 pre {
   overflow: visible !important;
   max-width: 1024px;
+}
+
+.optional {
+  font-style: italic;
+  color: rgba(var(--st-primary), 0.7)
+}
+
+p {
+  margin: 0;
+}
+
+p + p {
+  margin-top: 16px;
 }

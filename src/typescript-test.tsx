@@ -55,13 +55,18 @@ function Declaration({doc}: {doc: Documentable}) {
   return <div class={css.block} id={doc.name} data-categories={[...doc.categories].join(',')}>
     {doc.withClass((name, cls) => <Class name={name} cls={cls} />)}
     {doc.withInterface((name, cls) => <Interface name={name} cls={cls} />)}
-    {doc.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'function' : fns[0] instanceof ts.MethodDeclaration ? 'method' : undefined}/>))}
+    {doc.withFunctions((name, fns) => {
+      return fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'function' : fns[0] instanceof ts.MethodDeclaration || fns[0] instanceof ts.MethodSignature ? 'method' : undefined}/>)
+    })}
     {doc.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
     {doc.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
-    {If(doc.docs, d => <div class={css.doc}>{raw(md.render(d))}</div>)}
+    <div class={css.doc}>{doc.docs ? raw(md.render(doc.docs)) : '¯\\_(ツ)_/¯'}</div>
 
     {doc.withMembers(members => <div class='st-nest'>
-      {members.map(m => <Declaration doc={m}/>)}
+      {members.map(m => {
+        // console.log(doc.name + '.' + m.name, m.declarations.length)
+        return <Declaration doc={m}/>
+      })}
     </div>)}
 
   </div>
