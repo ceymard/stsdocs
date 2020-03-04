@@ -18,6 +18,27 @@ export function Template(a: {
         <link rel="stylesheet" href='./normalize.css'/>
         <link rel="stylesheet" href="./main.css"/>
         {If(a.description, desc => <meta name='description' content={desc}/>)}
+        <script>
+          {`
+          function scrollToHash(id) {
+            var elt = document.getElementById(id)
+            if (elt) {
+              elt.scrollIntoView()
+            }
+          }
+
+          window.addEventListener('hashchange', function (ev) {
+            var top = window.location.hash.slice(1)
+            scrollToHash(top)
+            ev.preventDefault()
+          })
+
+          window.addEventListener('load', function () {
+            if (window.location.hash)
+              scrollToHash(window.location.hash.slice(1))
+          })
+        `}
+        </script>
         <MoreHead.Display/>
       </head>
       <body>

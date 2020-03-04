@@ -22,12 +22,12 @@ body {
   color: rgb(var(--st-primary));
   --st-bg: 255, 255, 255;
   --st-primary: 10, 10, 11;
-  --st-class: 9, 132, 227;
-  --st-interface: 108, 92, 231;
-  --st-typealias: 99, 110, 114;
-  --st-function: 0, 184, 148;
-  --st-var: 225, 112, 85;
-  --st-namespace: 186, 176, 136;
+  --st-class: 75, 40, 130;
+  --st-interface: 46, 87, 147;
+  --st-typealias: 201, 97, 18;
+  --st-function: 23, 114, 69;
+  --st-var: 196, 167, 5;
+  --st-namespace: 196, 167, 5;
   --st-error: 214, 48, 49;
 }
 
@@ -48,6 +48,13 @@ body.dark {
   padding: 0 2px;
 }
 
+code {
+  font-family: 'Ubuntu Mono';
+  background-color: rgba(0, 0, 0, 0.07);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
 .st-doc p > code, .st-doc li > code {
   white-space: pre;
   background: rgba(var(--st-primary), 0.07);
@@ -64,14 +71,16 @@ blockquote {
 
 .st-doc {
   font-weight: 300;
-  padding: 8px;
-  background-color: rgba(var(--st-primary), 0.02);
+  padding: 16px;
+  /* background-color: rgba(var(--st-primary), 0.02); */
 }
 
 .st-block {
   position: relative;
-  padding: 16px;
-  /* background-color: rgba(var(--st-primary), 0.06); */
+  /* overflow: hidden; */
+  padding-bottom: 16px;
+  background-color: rgba(var(--st-primary), 0.06);
+  /* border-radius: 3px; */
 }
 
 .st-block .st-kind {
@@ -82,7 +91,7 @@ blockquote {
   transform: translateX(calc(-100% - 8px));
   color: rgba(255, 255, 255, 1);
   background-color: rgba(var(--st-primary), 0.5);
-  border-radius: 5px;
+  border-radius: 2px;
 }
 
 .st-kind-namespace {
@@ -114,16 +123,28 @@ blockquote {
   /* color: rgba(255, 255, 255, 1); */
 }
 
+.st-docmain > .st-block > .st-name {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .st-name {
-  color: rgba(var(--st-primary), 1);
+  color: rgba(var(--st-bg), 0.95);
+  padding: 8px 16px;
+  background-color: rgba(var(--st-primary), 1);
   font-family: 'Ubuntu Mono', monospace;
+  white-space: pre-wrap;
   font-size: 18px;
 }
 
-.st-name + .st-name {
-  margin-top: 9px;
+.st-name > * {
+  --st-primary: var(--st-bg);
 }
 
+.st-name + .st-name {
+  margin-top: 2px;
+}
 
 pre {
   background-color: rgba(var(--st-primary), 0.07);
@@ -163,11 +184,28 @@ a:hover {
 .st-docmain {
   display: flex;
   flex-direction: column;
-  padding: 32px;
-  padding-left: 90px;
+  padding: 0 32px 32px 32px;
+  /* padding-left: 90px; */
   flex-basis: 0;
   flex-grow: 1;
   overflow: auto;
+}
+
+.st-docmain > :first-child {
+  margin-top: 32px;
+}
+
+.st-nest {
+  margin-top: 16px;
+  padding: 0 16px;
+}
+
+.st-nest > .st-block {
+  margin-top: 16px;
+}
+
+.st-docmain > * {
+  width: 1024px;
 }
 
 .st-docmain > .st-block {

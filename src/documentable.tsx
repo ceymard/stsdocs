@@ -132,7 +132,7 @@ export class Documentable {
     }).join('\n\n').trim())
       .replace(/@param (\w+)/g, (_, m) => ` - **\`${m}\`**`)
       .replace(/@returns?/g, () => ` - **returns**`)
-      .replace(/@category ([^\n]+)\n?/g, (_, cats: string) => {
+      .replace(/@category ([^\n\*\/]+)\n?/g, (_, cats: string) => {
         for (var c of cats.trim().split(/\s*,\s*/g))
           categories.add(c.trim())
         return ''
@@ -214,13 +214,20 @@ export class Documentable {
         members_with_names.push(['0-constructor', 'constructor', m])
       else if (m instanceof ts.MethodDeclaration || m instanceof ts.PropertyDeclaration || m instanceof ts.GetAccessorDeclaration || m instanceof ts.SetAccessorDeclaration) {
         const mods = m.getModifiers().map(m => m.getText().trim())
+        const nb = [
+          m instanceof ts.MethodDeclaration,
+          m instanceof ts.GetAccessorDeclaration,
+          m instanceof ts.SetAccessorDeclaration,
+          m instanceof ts.PropertyDeclaration,
+        ].indexOf(true) + 3
+
         if (mods.includes('static'))
-          members_with_names.push(['4-' + m.getName(), `${this.name}.${m.getName()}`, m])
+          members_with_names.push([`9${nb}-` + m.getName(), `${this.name}.${m.getName()}`, m])
         else
-          members_with_names.push(['3-' + m.getName(), `.${m.getName()}`, m])
+          members_with_names.push([`${nb}-` + m.getName(), `${m.getName()}`, m])
       } else {
         // get statics
-        members_with_names.push(['3-' + m.getName(), `.${m.getName()}`, m])
+        members_with_names.push(['3-' + m.getName(), `${m.getName()}`, m])
       }
     }
 
@@ -234,7 +241,7 @@ export class Documentable {
     var res: Documentable[] = []
     for (const [name, items] of grouped_members) {
       var d = new Documentable(name, items)
-      if (!d.tags.has('internal')) res.push(d)
+      if (!d.categories.has('internal')) res.push(d)
     }
 
     return res

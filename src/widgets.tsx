@@ -155,14 +155,14 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
 
 
 export function TypeAlias({typ, name}: Attrs & {typ: ts.TypeAliasDeclaration, name: string}) {
-  return <DocBlock class={css.kind_typealias} name={name} kind='T'>
+  return <DocBlock class={css.kind_typealias} name={name} kind='type'>
     <TypeParams ts={typ.getTypeParameters()}/> = <Type type={typ.getTypeNode()}/>
   </DocBlock>
 }
 
 
 export function Interface(a: Attrs & {cls: ts.InterfaceDeclaration, name: string}) {
-  return <DocBlock class={css.kind_interface} name={a.name} kind='I'>
+  return <DocBlock class={css.kind_interface} name={a.name} kind='interface'>
     <TypeParams ts={a.cls.getTypeParameters()}/><ExpressionWithTypeArguments keyword=' extends' impl={a.cls.getExtends()}/>
   </DocBlock>
 }
@@ -180,7 +180,7 @@ export function Kind(a: Attrs, ch: Child) {
 }
 
 export function Class(a: Attrs & {cls: ts.ClassDeclaration, name: string}) {
-  return <DocBlock class={css.kind_class} name={a.name} kind='C'>
+  return <DocBlock class={css.kind_class} name={a.name} kind='class'>
     <TypeParams ts={a.cls.getTypeParameters()}/> <ExpressionWithTypeArguments keyword='extends' impl={a.cls.getExtends()}/> <ExpressionWithTypeArguments impl={a.cls.getImplements()} keyword='implements'/>
   </DocBlock>
 }
@@ -236,15 +236,17 @@ export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
 export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.ConstructSignatureDeclaration | ts.MethodSignature | ts.CallSignatureDeclaration | ts.FunctionTypeNode, name: string, kind?: string}) {
   var fn = a.proto
   var mods = hasModifiers(a.proto) ? ' ' + a.proto.getModifiers().map(m => m.getText()).filter(m => m !== 'export').join(' ') + ' ' : ''
+  var params = fn.getParameters()
+  var many = params.length > 1
 
-  return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, ', ')}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
+return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({many ? '\n  ': ''}{Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, many ? ',\n  ' : ', ')}{many ? '\n' : ''}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
   </DocBlock>
 }
 
 
 export function DocBlock(a: Attrs & {name: string, kind?: string}, ch: Child[]) {
   return <div class={css.name}>
-      {If(a.kind, k => <span class={css.kind}>{k}</span>)}
-      <b>{a.name}</b>{ch}
+      {/* {If(a.kind, k => <span class={css.kind}>{k}</span>)} */}
+    <b>{a.kind?.trim() && a.kind !== 'function' && a.kind !== 'method' ? a.kind + ' ' : ''}{a.name.trim()}</b>{ch}
   </div>
 }

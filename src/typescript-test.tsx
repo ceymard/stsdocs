@@ -52,10 +52,10 @@ function coalesce_namespaces(doc: Documentable, res: Documentable[] = []) {
 }
 
 function Declaration({doc}: {doc: Documentable}) {
-  return <div class={css.block} id={doc.name}>
+  return <div class={css.block} id={doc.name} data-categories={[...doc.categories].join(',')}>
     {doc.withClass((name, cls) => <Class name={name} cls={cls} />)}
     {doc.withInterface((name, cls) => <Interface name={name} cls={cls} />)}
-    {doc.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'F' : fns[0] instanceof ts.MethodDeclaration ? 'M' : undefined}/>))}
+    {doc.withFunctions((name, fns) => fns.map(f => <FnProto name={name} proto={f} kind={fns[0] instanceof ts.FunctionDeclaration ? 'function' : fns[0] instanceof ts.MethodDeclaration ? 'method' : undefined}/>))}
     {doc.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
     {doc.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
     {If(doc.docs, d => <div class={css.doc}>{raw(md.render(d))}</div>)}
@@ -93,7 +93,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
           {Array.from(by_categories.entries()).filter(c => c[0] !== 'toc').map(([category, declarations]) => <div>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
             {declarations.filter(d => d.categories.has('toc')).map(e =>
-              <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}</b></a></div>
+              <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}{e.kind === 'function' || e.kind === 'method' ? '()' : ''}</b></a></div>
             )}
           </div>)}
         </div>
@@ -101,7 +101,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
       <div class='st-docmain'>
         {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')))}
         <h1>API Documentation</h1>
-        {all_declarations.map(decl => <Declaration doc={decl}/>)}
+        {all_declarations.filter(d => !d.categories.has('internal')).map(decl => <Declaration doc={decl}/>)}
       </div>
     </div>
 
