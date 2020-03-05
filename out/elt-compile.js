@@ -48,7 +48,7 @@ const p = e.$DIV()
         target: 1,
         strict: true,
         lib: ["es6", "dom"],
-        jsx: "react",
+        jsx: 2,
         jsxFactory: "E",
         module: 1, // amd // https://github.com/microsoft/monaco-typescript/blob/master/src/monaco.d.ts
         types: ["elt"]
@@ -63,16 +63,22 @@ const p = e.$DIV()
     // extra libraries
 
     service.addExtraLib(
-      document.getElementById('elt-d-ts').innerText,
+      document.getElementById('elt-d-ts').innerText + `
+declare global {
+  function demo_display(...a: Renderable[]): void
+  function DemoBtn(attrs: Attrs<HTMLButtonElement> & {do: (a?: any) => any}, chld: Renderable[]): HTMLButtonElement
+}
+      `,
       'file:///node_modules/elt/index.d.ts'
     );
 
+    // sdb.updateCompilerSetting('')
     sdb.updateCompilerSetting('jsxFactory', 'E')
     sdb.updateCompilerSetting('target', 1)
     sdb.updateCompilerSetting('module', 1)
     sdb.monaco.editor.setTheme('sandbox-dark')
 
-    console.log(sdb)
+    // console.log(sdb)
   })
 }
 
@@ -83,6 +89,15 @@ wd.addEventListener('click', ev => {
   if (ev.currentTarget === ev.target)
     wd.style.display = 'none'
 })
+wd.addEventListener('keydown', ev => {
+  if (ev.code === 'Enter' && ev.ctrlKey
+   || ev.code === 'KeyS' && ev.ctrlKey
+  ) {
+    ev.preventDefault()
+    ev.stopPropagation()
+    reload()
+  }
+}, true)
 wd.style.display = 'none'
 
 const examples = Array.from(document.getElementsByTagName('pre'))
@@ -96,10 +111,7 @@ for (let e of examples) {
   btn.addEventListener('click', ev => {
     sandbox.setText(e.innerText)
 
-    sandbox.getRunnableJS().then(code => {
-      // console.log(code)
-      mkiframe(code)
-    })
+    reload()
     wd.style.display = 'flex'
   })
 
@@ -134,26 +146,44 @@ function h(elt, ...children) {
   return node
 }
 
-function mkiframe(code) {
-  var pifr = document.getElementById('ifr')
-  if (pifr) pifr.remove()
-  var ifr = document.createElement('iframe')
-
-  ifr.sandbox = 'allow-same-origin allow-scripts'
-  ifr.id = 'ifr'
-  ifr.src = './run.html'
-
-  code = (code || '').replace(/"use strict";/, '')
-  code = `
-  console.log(require('elt'))
-  ${code}
-  `
-  ifr.addEventListener('load', ev => {
-    var cw = ifr.contentWindow
-    cw.postMessage(code, '*')
+function reload() {
+  sandbox.getRunnableJS().then(code => {
+    // console.log(code)
+    mkiframe(code)
   })
+}
 
-  document.getElementById('st-playground-root').appendChild(ifr)
+document.getElementById('st-playground-reload').addEventListener('click', ev => {
+  reload()
+})
+
+var _ifr = null
+function mkiframe(code) {
+  if (!_ifr) {
+    var pifr = document.getElementById('ifr')
+    if (pifr) pifr.remove()
+    var ifr = document.createElement('iframe')
+
+    ifr.sandbox = 'allow-same-origin allow-scripts'
+    ifr.id = 'ifr'
+    ifr.src = './run.html'
+
+    code = (code || '').replace(/"use strict";/, '')
+    code = `
+    ${code}
+    `
+
+    ifr.addEventListener('load', ev => {
+      var cw = ifr.contentWindow
+      cw.postMessage(code, '*')
+    })
+
+    document.getElementById('st-playground-root').appendChild(ifr)
+    _ifr = ifr
+  } else {
+    _ifr.contentWindow.postMessage(code, '*')
+  }
+
 
   // var script = document.createelement
 

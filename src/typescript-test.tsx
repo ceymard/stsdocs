@@ -111,8 +111,13 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     </div>
 
     <div id='st-playground-overlay'>
+      <div id='st-playground-header'>
+        <div>Test code here</div>
+        <button id='st-playground-reload'>Reload</button>
+      </div>
       <div id='st-playground-root'>
         <div id='st-playground'></div>
+        <div id='ifr'></div>
       </div>
     </div>
 
