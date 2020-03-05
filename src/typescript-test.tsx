@@ -1,6 +1,6 @@
 import * as ts from 'ts-morph'
 import * as fs from 'fs'
-import { s, Child, raw, include, If } from 'stsx'
+import { s, Child, raw, include } from 'stsx'
 import { Documentable, sorter, MapArray } from './documentable'
 import { Template, MoreHead } from './tpl'
 import css from './css'
@@ -110,6 +110,14 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
       </div>
     </div>
 
+    <div id='st-playground-overlay'>
+      <div id='st-playground-root'>
+        <div id='st-playground'></div>
+      </div>
+    </div>
+
+    <div style='display: none' id='elt-d-ts'>{include('elt/elt.d.ts', {escape: true})}</div>
+    <script src='./elt-compile.js'></script>
     <MoreHead>
       <style>{include('prismjs/themes/prism-tomorrow.css')}</style>
     </MoreHead>

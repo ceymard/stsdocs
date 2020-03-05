@@ -1,0 +1,163 @@
+
+// First set up the VSCode loader in a script tag
+const getLoaderScript = document.createElement('script')
+getLoaderScript.src = 'https://www.typescriptlang.org/v2/js/vs.loader.js'
+getLoaderScript.async = true
+getLoaderScript.onload = () => {
+  // Now the loader is ready, tell require where it can get the version of monaco, and the sandbox
+  // This version uses the latest version of the sandbox, which is used on the TypeScript website
+
+  // For the monaco version you can use MaxCDN or the TypeSCript web infra CDN
+  // You can see the available releases for TypeScript here:
+  // https://typescript.azureedge.net/indexes/releases.json
+  //
+  require.config({
+    paths: {
+      vs: 'https://typescript.azureedge.net/cdn/3.7.3/monaco/min/vs',
+      sandbox: 'https://www.typescriptlang.org/v2/js/sandbox',
+    },
+    // This is something you need for monaco to work
+    ignoreDuplicateModules: ['vs/editor/editor.main'],
+  })
+
+  // Grab a copy of monaco, TypeScript and the sandbox
+  require(['vs/editor/editor.main', 'vs/language/typescript/tsWorker', 'sandbox/index'], (
+    main,
+    _tsWorker,
+    sandbox
+  ) => {
+    const initialCode = `import { e } from "elt"
+const p = e.$DIV()
+`
+
+    const isOK = main && window.ts && sandbox
+    if (isOK) {
+      // ??
+    } else {
+      console.error('Could not get all the dependencies of sandbox set up!')
+      console.error('main', !!main, 'ts', !!window.ts, 'sandbox', !!sandbox)
+      return
+    }
+
+    // Create a sandbox and embed it into the the div #monaco-editor-embed
+    const sandboxConfig = {
+      text: initialCode,
+      theme: 'sandbox-dark',
+      acquireTypes: false,
+      compilerOptions: {
+        target: 1,
+        strict: true,
+        lib: ["es6", "dom"],
+        jsx: "react",
+        jsxFactory: "E",
+        module: 1, // amd // https://github.com/microsoft/monaco-typescript/blob/master/src/monaco.d.ts
+        types: ["elt"]
+      },
+      domID: 'st-playground',
+    }
+
+    // has getText() and setText()
+    var sdb = window.sandbox = sandbox.createTypeScriptSandbox(sandboxConfig, main, window.ts)
+
+    var service = sdb.languageServiceDefaults
+    // extra libraries
+
+    service.addExtraLib(
+      document.getElementById('elt-d-ts').innerText,
+      'file:///node_modules/elt/index.d.ts'
+    );
+
+    sdb.updateCompilerSetting('jsxFactory', 'E')
+    sdb.updateCompilerSetting('target', 1)
+    sdb.updateCompilerSetting('module', 1)
+    sdb.monaco.editor.setTheme('sandbox-dark')
+
+    console.log(sdb)
+  })
+}
+
+document.body.appendChild(getLoaderScript)
+
+const wd = document.getElementById('st-playground-overlay')
+wd.addEventListener('click', ev => {
+  if (ev.currentTarget === ev.target)
+    wd.style.display = 'none'
+})
+wd.style.display = 'none'
+
+const examples = Array.from(document.getElementsByTagName('pre'))
+    .filter(n => n.classList.contains('language-tsx'))
+
+for (let e of examples) {
+  var btn = document.createElement('button')
+  btn.innerText = 'Run Example'
+  e.parentNode.insertBefore(btn, e.nextSibling)
+
+  btn.addEventListener('click', ev => {
+    sandbox.setText(e.innerText)
+
+    sandbox.getRunnableJS().then(code => {
+      // console.log(code)
+      mkiframe(code)
+    })
+    wd.style.display = 'flex'
+  })
+
+  // For runnable code, do something
+}
+
+// HA ! We cheat !
+function require(str) {
+  return window[str]
+}
+
+function h(elt, ...children) {
+  var node = typeof elt === 'string' ? document.createElement(elt) : elt
+  for (var c of children) {
+    if (typeof c === 'string' || typeof c === 'number') {
+      node.appendChild(document.createTextNode(c.toString()))
+    } else if (c && 'parentNode' in c) {
+      node.appendChild(c)
+    } else if (typeof c === 'function') {
+      c(node)
+    } else if (Array.isArray(c)) {
+      h(node, ...c)
+    } else if (c != null) {
+      // object
+      var keys = Object.keys(c)
+      for (var k of keys) {
+        node.setAttribute(k, c[k])
+      }
+      // ...?
+    }
+  }
+  return node
+}
+
+function mkiframe(code) {
+  var pifr = document.getElementById('ifr')
+  if (pifr) pifr.remove()
+  var ifr = document.createElement('iframe')
+
+  ifr.sandbox = 'allow-same-origin allow-scripts'
+  ifr.id = 'ifr'
+  ifr.src = './run.html'
+
+  code = (code || '').replace(/"use strict";/, '')
+  code = `
+  console.log(require('elt'))
+  ${code}
+  `
+  ifr.addEventListener('load', ev => {
+    var cw = ifr.contentWindow
+    cw.postMessage(code, '*')
+  })
+
+  document.getElementById('st-playground-root').appendChild(ifr)
+
+  // var script = document.createelement
+
+  // var script = document.createElement('script')
+  // script.src = './elt.js'
+
+}

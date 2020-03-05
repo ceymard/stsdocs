@@ -264,3 +264,37 @@ p {
 p + p {
   margin-top: 16px;
 }
+
+#st-playground-overlay {
+  z-index: 5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.54);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#st-playground-root {
+  width: 90%;
+  height: 90%;
+  top: 5%;
+  left: 5%;
+  display: flex;
+  flex-direction: row;
+}
+
+#st-playground-root > iframe {
+  flex-grow: 1;
+  flex-basis: 0;
+  background: white;
+}
+
+#st-playground {
+  flex-grow: 3;
+  flex-basis: 0;
+}
