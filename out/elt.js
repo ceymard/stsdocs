@@ -8,6 +8,7 @@
      * Does a naive foreach on an IndexableArray
      * @param _arr the array
      * @param fn the function to apply
+     * @category internal
      */
     function EACH(_arr, fn) {
         for (var i = 0, arr = _arr.arr; i < arr.length; i++) {
@@ -20,6 +21,7 @@
     }
     /**
      * An array wrapper that infects its elements with their indexes for faster deletion.
+     * @category internal
      */
     class IndexableArray {
         constructor() {
@@ -1255,13 +1257,13 @@
     /**
      * Symbol property on `Node` to an array of observers that are started when the node is `init()` and
      * stopped on `deinit()`.
-     * @internal
+     * @category low level dom, toc
      */
     const sym_observers = Symbol('elt-observers');
     /**
      * Symbol property added on `Node` to track the status of the node ; if it's been init(), inserted() or more.
      * Its value type is `string`.
-     * @internal
+     * @category low level dom, toc
      */
     const sym_mount_status = Symbol('elt-mount-status');
     /**
@@ -1270,23 +1272,23 @@
      * The more "correct" way of achieving this would have been to create
      * a WeakSet, but since the performance is not terrific (especially
      * when the number of elements gets high), the symbol solution was retained.
-     * @internal
+     * @category low level dom, toc
      */
     const sym_mixins = Symbol('elt-mixins');
     /**
      * A symbol property on `Node` to an array of functions to run when the node is **init**, which is to
      * say usually right when it was created but already added to a parent (which can be a `DocumentFragment`).
-     * @internal
+     * @category low level dom, toc
      */
     const sym_init = Symbol('elt-init');
     /**
      * A symbol property on `Node` to an array of functions to run when the node is **inserted** into a document.
-     * @internal
+     * @category low level dom, toc
      */
     const sym_inserted = Symbol('elt-inserted');
     /**
      * A symbol property on `Node` to an array of functions to run when the node is **removed** from a document.
-     * @internal
+     * @category low level dom, toc
      */
     const sym_removed = Symbol('elt-removed');
     const NODE_IS_INITED = 0x01;
@@ -1319,12 +1321,14 @@
     }
     /**
      * Return `true` if this node is currently observing its associated observables.
+     * @category low level dom, toc
      */
     function node_is_observing(node) {
         return !!(node[sym_mount_status] & NODE_IS_OBSERVING);
     }
     /**
      * Return `true` is the init() phase was already executed on this node.
+     * @category low level dom, toc
      */
     function node_is_inited(node) {
         return !!(node[sym_mount_status] & NODE_IS_INITED);
@@ -1336,7 +1340,7 @@
      * its status is potentially updated after the node was inserted or removed from the dom, or could
      * have been forced to another value by a third party.
      *
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_is_inserted(node) {
         return !!(node[sym_mount_status] & NODE_IS_INSERTED);
@@ -1422,7 +1426,7 @@
      *
      * If `prev_parent` is not supplied, then the `remove` is not run, but observers stop.
      *
-     * @category dom, toc
+     * @category internal
      */
     function node_do_remove(node, prev_parent) {
         const node_stack = [];
@@ -1433,14 +1437,13 @@
                 iter = iter.firstChild;
             }
             _apply_removed(iter, prev_parent ? iter.parentNode : null);
-            if (prev_parent)
-                // When we're here, we're on a terminal node, so
-                // we're going to have to process it.
-                while (iter && !iter.nextSibling) {
-                    iter = node_stack.pop();
-                    if (iter)
-                        _apply_removed(iter, prev_parent ? iter.parentNode : null);
-                }
+            // When we're here, we're on a terminal node, so
+            // we're going to have to process it.
+            while (iter && !iter.nextSibling) {
+                iter = node_stack.pop();
+                if (iter)
+                    _apply_removed(iter, prev_parent ? iter.parentNode : null);
+            }
             // So now we're going to traverse the next node.
             iter = iter && iter.nextSibling;
         }
@@ -1466,6 +1469,11 @@
         }
     }
     /**
+     * This is where we keep track of the registered documents.
+     * @category internal
+     */
+    const _registered_documents = new WeakSet();
+    /**
      * Setup the mutation observer that will be in charge of listening to document changes
      * so that the `init`, `inserted` and `removed` life-cycle callbacks are called.
      *
@@ -1478,9 +1486,11 @@
      * to stop all the observers when the window closes.
      *
      * ```tsx
-     * import { setup_mutation_observer, $inserted } from 'elt'
+     * import { o, setup_mutation_observer, $inserted, $observe } from 'elt'
      * // typically in the top-level app.tsx or index.tsx
      * // setup_mutation_observer(document)
+     *
+     * const o_test = o(1)
      *
      * // This example may require a popup permission from your browser.
      * const new_window = window.open(undefined, '_blank', 'menubar=0,status=0,toolbar=0')
@@ -1488,14 +1498,19 @@
      *   setup_mutation_observer(new_window.document)
      *   new_window.document.body.appendChild(<div>
      *     {$inserted(() => console.log('inserted.'))}
+     *     {$observe(o_test, t => console.log('window sees t:', t))}
+     *     HELLO.
      *   </div>)
      * }
      *
+     * setInterval(() => {
+     *   o_test.mutate(t => t + 1)
+     * }, 1000)
      *
      * @category dom, toc
      */
     function setup_mutation_observer(node) {
-        var _a;
+        var _a, _b;
         if (!node.isConnected && !!node.ownerDocument)
             throw new Error(`cannot setup mutation observer on a Node that is not connected in a document`);
         var obs = new MutationObserver(records => {
@@ -1516,10 +1531,15 @@
                 }
             }
         });
-        (_a = node.ownerDocument, (_a !== null && _a !== void 0 ? _a : node)).addEventListener('unload', ev => {
-            node_do_remove(node, null); // technically, the nodes were not removed, but we want to at least shut down all observers.
-            obs.disconnect();
-        });
+        // Make sure that when closing the window, everything gets cleaned up
+        const target_document = (_a = node.ownerDocument, (_a !== null && _a !== void 0 ? _a : node));
+        if (!_registered_documents.has(target_document)) {
+            (_b = target_document.defaultView) === null || _b === void 0 ? void 0 : _b.addEventListener('unload', ev => {
+                // Calls a `removed` on all the nodes in the closing window.
+                node_do_remove(target_document.firstChild, target_document);
+                obs.disconnect();
+            });
+        }
         // observe modifications to *all the tree*
         obs.observe(node, {
             childList: true,
@@ -1528,17 +1548,15 @@
         return obs;
     }
     /**
-     * Insert a `node` to a `parent`'s child list before `refchild`.
-     *
-     * This method should **always** be used instead of `Node.appendChild` or `Node.insertBefore` when
-     * dealing with nodes created with `#e`, as it performs the following operations on top of adding
-     * them :
+     * Insert a `node` to a `parent`'s child list before `refchild`, mimicking `Node.insertBefore()`.
+     * This function is used by verbs and `e()` to run the `init()` and `inserted()` callbacks before
+     * the mutation observer for performance reasons.
      *
      *  - Call the `init()` methods on `#Mixin`s present on the nodes that were not already mounted
      *  - Call the `inserted()` methods on `#Mixin`'s present on **all** the nodes and their descendents
      *     if `parent` is already inside the DOM.
      *
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function insert_before_and_init(parent, node, refchild = null) {
         var df;
@@ -1573,7 +1591,7 @@
     }
     /**
      * Alias for `#insert_before_and_mount` that mimicks `Node.appendChild()`
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function append_child_and_init(parent, child) {
         insert_before_and_init(parent, child);
@@ -1584,7 +1602,9 @@
      * Observers are called whenever the observable changes **and** the node is contained
      * in the document.
      *
-     * @category dom, toc
+     * Used mostly by [`$observe()`](#$observe) and `Mixin.observe`
+     *
+     * @category low level dom, toc
      */
     function node_observe(node, obs, obsfn) {
         if (!(o.isReadonlyObservable(obs))) {
@@ -1611,7 +1631,7 @@
     }
     /**
      * Stop a node from observing an observable, even if it is still in the DOM
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_unobserve(node, obsfn) {
         var _a;
@@ -1627,7 +1647,7 @@
     }
     /**
      * Observe an attribute and update the node as needed.
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_observe_attribute(node, name, value) {
         node_observe(node, value, val => {
@@ -1642,7 +1662,7 @@
     }
     /**
      * Observe a style (as JS defines it) and update the node as needed.
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_observe_style(node, style) {
         if (style instanceof o.Observable) {
@@ -1669,7 +1689,7 @@
     }
     /**
      * Observe a complex class definition and update the node as needed.
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_observe_class(node, c) {
         if (!c)
@@ -1752,7 +1772,7 @@
      * </div>
      * ```
      *
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_on(node, sym, callback) {
         var _a;
@@ -1760,7 +1780,7 @@
     }
     /**
      * Remove a previously associated `callback` from the life-cycle event `sym` for the `node`.
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_off(node, sym, callback) {
         var _a;
@@ -1768,7 +1788,7 @@
     }
     /**
      * Remove all the nodes after `start` until `until` (included), calling `removed` and `deinit` as needed.
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function node_remove_after(start, until) {
         if (!start)
@@ -2266,34 +2286,6 @@
      * Control structures to help with readability.
      */
     /**
-     * Get a node that can be inserted into the DOM from an insertable `i`. The returned value can be
-     * a single `Node` or a `DocumentFragment` if the insertable was an array.
-     *
-     * Note that this function will ignore Decorators, Mixins and other non-renderable elements.
-     *
-     * @param i The insertable
-     *
-     * @category dom, toc
-     */
-    function get_node_from_insertable(i) {
-        if (i instanceof Node)
-            return i;
-        if (i instanceof Array) {
-            const res = document.createDocumentFragment();
-            for (var n of i) {
-                res.appendChild(get_node_from_insertable(n));
-            }
-            return res;
-        }
-        if (i instanceof o.Observable) {
-            return $Display(i);
-        }
-        if (i != null) {
-            return document.createTextNode(i.toString());
-        }
-        return document.createComment('' + i);
-    }
-    /**
      * A subclass of `#Verb` made to store nodes between two comments.
      *
      * Can be used as a base to build verbs more easily.
@@ -2318,7 +2310,8 @@
         setContents(cts) {
             this.clear();
             // Insert the new comment before the end
-            insert_before_and_init(this.node.parentNode, cts, this.end);
+            if (cts)
+                insert_before_and_init(this.node.parentNode, cts, this.end);
         }
     }
     /**
@@ -2332,7 +2325,7 @@
         }
         init(node) {
             super.init(node);
-            this.observe(this._obs, value => this.setContents(get_node_from_insertable(value)));
+            this.observe(this._obs, value => this.setContents(e.renderable_to_node(value)));
         }
     }
     /**
@@ -2354,7 +2347,7 @@
      */
     function $Display(obs) {
         if (!(obs instanceof o.Observable)) {
-            return get_node_from_insertable(obs);
+            return e.renderable_to_node(obs, true);
         }
         return e(document.createComment('$Display'), new Displayer(obs));
     }
@@ -2387,10 +2380,10 @@
         // ts bug on condition.
         if (typeof display === 'function' && !(condition instanceof o.Observable)) {
             return condition ?
-                get_node_from_insertable(display(condition))
-                : get_node_from_insertable(display_otherwise ?
+                e.renderable_to_node(display(condition), true)
+                : e.renderable_to_node(display_otherwise ?
                     (display_otherwise(null))
-                    : document.createComment('false'));
+                    : document.createComment('false'), true);
         }
         return e(document.createComment('$If'), new $If.ConditionalDisplayer(display, condition, display_otherwise));
     }
@@ -2448,15 +2441,14 @@
     function $Repeat(ob, render, separator) {
         if (!(ob instanceof o.Observable)) {
             const arr = ob;
-            const final = new Array(separator ? arr.length * 2 - 1 : arr.length);
-            var i = 0;
-            var j = 0;
-            for (var elt of arr) {
-                arr[i++] = render(elt, j++);
-                if (separator)
-                    arr[i++] = separator(j - 1);
+            var df = document.createDocumentFragment();
+            for (var i = 0, l = arr.length; i < l; i++) {
+                df.appendChild(e.renderable_to_node(render(arr[i], i), true));
+                if (i > 1 && separator) {
+                    df.appendChild(e.renderable_to_node(separator(i - 1), true));
+                }
             }
-            return get_node_from_insertable(final);
+            return df;
         }
         return e(document.createComment('$Repeat'), new $Repeat.Repeater(ob, render, separator));
     }
@@ -2496,9 +2488,11 @@
                 var ob = this.obs.p(this.next_index);
                 this.child_obs.push(ob);
                 if (this.separator && this.next_index > 0) {
-                    fr.appendChild(get_node_from_insertable(this.separator(this.next_index)));
+                    var sep = e.renderable_to_node(this.separator(this.next_index));
+                    if (sep)
+                        fr.appendChild(sep);
                 }
-                var node = get_node_from_insertable(this.renderfn(ob, this.next_index));
+                var node = e.renderable_to_node(this.renderfn(ob, this.next_index), true);
                 this.positions.push(node instanceof DocumentFragment ? node.lastChild : node);
                 fr.appendChild(node);
                 this.next_index++;
@@ -2798,8 +2792,9 @@
      *
      * The JSX namespace points `JSX.Fragment` to this function.
      *
-     * While it is a "valid" component in the eyes of ELT, no life-cycle event will ever be triggered
-     * on a `$Fragment`.
+     * > **Note**: Its signature says it expects `Insertable`, but since a document fragment itself never
+     * > ends up being added to `Node`, no observable will ever run on it, no life cycle callback will
+     * > ever be called on it.
      *
      * ```tsx
      * // If using jsxFactory, you have to import $Fragment and use it
@@ -2821,8 +2816,8 @@
      * @category dom, toc
      */
     function $Fragment(...children) {
-        // This is a trick ! It is not actually an element !
         const fr = document.createDocumentFragment();
+        // This is a trick, children may contain lots of stuff
         return e(fr, children);
     }
     (function (e) {
@@ -2859,12 +2854,9 @@
             }
         }
         e.separate_children_from_rest = separate_children_from_rest;
-        /**
-         * @category internal
-         */
-        function renderable_to_node(r) {
+        function renderable_to_node(r, null_as_comment = false) {
             if (r == null)
-                return null;
+                return null_as_comment ? document.createComment(' null ') : null;
             else if (typeof r === 'string' || typeof r === 'number')
                 return document.createTextNode(r.toString());
             else if (o.isReadonlyObservable(r))
@@ -3253,15 +3245,20 @@
          *
          * ```tsx
          * class LoginBlock extends App.Block {
-         *   Main = this.view(() => <div>
-         *     <SomeLoginForm/>
-         *   </div>)
+         *   @App.view
+         *   Main() {
+         *     return <div>
+         *       <SomeLoginForm/>
+         *     </div>
+         *   }
          * }
          *
-         * append_child_and_mount(document.body, App.DisplayApp('Main', LoginBlock))
+         * document.body.appendChild(
+         *   App.DisplayApp('Main', LoginBlock)
+         * )
          * ```
          *
-         * @category verb
+         * @category app, toc
          */
         function DisplayApp(main_view, ...blocks) {
             var app = new App(main_view, blocks);
@@ -3288,6 +3285,8 @@
          *
          * Blocks are meant to be used by *composition*, and not through extension.
          * Do not subclass a Block unless its state is the exact same type.
+         *
+         * @category app, toc
          */
         class Block extends o.ObserverHolder {
             constructor(app) {
@@ -3446,6 +3445,7 @@
         App.Block = Block;
         /**
          * A registry that holds types mapped to their instance.
+         * @category internal
          */
         class Registry {
             constructor(app) {
@@ -3554,7 +3554,6 @@
     exports.Mixin = Mixin;
     exports.append_child_and_init = append_child_and_init;
     exports.e = e;
-    exports.get_node_from_insertable = get_node_from_insertable;
     exports.insert_before_and_init = insert_before_and_init;
     exports.node_add_event_listener = node_add_event_listener;
     exports.node_add_mixin = node_add_mixin;

@@ -1,7 +1,8 @@
 
 // First set up the VSCode loader in a script tag
 const getLoaderScript = document.createElement('script')
-getLoaderScript.src = 'https://www.typescriptlang.org/v2/js/vs.loader.js'
+// getLoaderScript.src = 'https://www.typescriptlang.org/v2/js/vs.loader.js'
+getLoaderScript.src = './loader.js'
 getLoaderScript.async = true
 getLoaderScript.onload = () => {
   // Now the loader is ready, tell require where it can get the version of monaco, and the sandbox
@@ -14,7 +15,8 @@ getLoaderScript.onload = () => {
   require.config({
     paths: {
       vs: 'https://typescript.azureedge.net/cdn/3.7.3/monaco/min/vs',
-      sandbox: 'https://www.typescriptlang.org/v2/js/sandbox',
+      // sandbox: 'https://www.typescriptlang.org/v2/js/sandbox',
+      sandbox: './sandbox',
     },
     // This is something you need for monaco to work
     ignoreDuplicateModules: ['vs/editor/editor.main'],

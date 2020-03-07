@@ -10,7 +10,7 @@ window.addEventListener('message', ev => {
   }
 
   var sc = document.createElement('script')
-  sc.appendChild(document.createTextNode(code))
+  sc.appendChild(document.createTextNode(`(function () {${code}})()`))
   last_script = sc
   document.head.appendChild(sc)
 })
