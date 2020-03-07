@@ -164,7 +164,7 @@ function mkiframe(code) {
     if (pifr) pifr.remove()
     var ifr = document.createElement('iframe')
 
-    ifr.sandbox = 'allow-same-origin allow-scripts'
+    ifr.sandbox = 'allow-same-origin allow-scripts allow-popups'
     ifr.id = 'ifr'
     ifr.src = './run.html'
 

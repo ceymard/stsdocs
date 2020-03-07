@@ -15,6 +15,9 @@ window.addEventListener('message', ev => {
   document.head.appendChild(sc)
 })
 
+// we do that for all the demos.
+elt.setup_mutation_observer(document)
+
 function require(name) {
   return window[name]
 }

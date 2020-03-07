@@ -1274,164 +1274,258 @@
      */
     const sym_mixins = Symbol('elt-mixins');
     /**
-     * A symbol property on `Node` to an array of functions to run when the node is `init()`
+     * A symbol property on `Node` to an array of functions to run when the node is **init**, which is to
+     * say usually right when it was created but already added to a parent (which can be a `DocumentFragment`).
      * @internal
      */
     const sym_init = Symbol('elt-init');
     /**
-     * A symbol property on `Node` to an array of functions to run when the node is `deinit()`
-     * @internal
-     */
-    const sym_deinit = Symbol('elt-deinit');
-    /**
-     * A symbol property on `Node` to an array of functions to run when the node is `inserted()` into the document.
+     * A symbol property on `Node` to an array of functions to run when the node is **inserted** into a document.
      * @internal
      */
     const sym_inserted = Symbol('elt-inserted');
     /**
-     * A symbol property on `Node` to an array of functions to run when the node is directly `removed()` from the document.
+     * A symbol property on `Node` to an array of functions to run when the node is **removed** from a document.
      * @internal
      */
     const sym_removed = Symbol('elt-removed');
+    const NODE_IS_INITED = 0x01;
+    const NODE_IS_INSERTED = 0x10;
+    const NODE_IS_OBSERVING = 0x100;
+    function _node_call_cbks(node, sym, parent) {
+        var cbks = node[sym];
+        if (!cbks)
+            return;
+        parent = (parent !== null && parent !== void 0 ? parent : node.parentNode);
+        for (var i = 0, l = cbks.length; i < l; i++) {
+            cbks[i](node, parent);
+        }
+    }
+    function _node_start_observers(node) {
+        var obs = node[sym_observers];
+        if (!obs)
+            return;
+        for (var i = 0, l = obs.length; i < l; i++) {
+            obs[i].startObserving();
+        }
+    }
+    function _node_stop_observers(node) {
+        var obs = node[sym_observers];
+        if (!obs)
+            return;
+        for (var i = 0, l = obs.length; i < l; i++) {
+            obs[i].stopObserving();
+        }
+    }
     /**
-     * Call init() functions on a node
+     * Return `true` if this node is currently observing its associated observables.
+     */
+    function node_is_observing(node) {
+        return !!(node[sym_mount_status] & NODE_IS_OBSERVING);
+    }
+    /**
+     * Return `true` is the init() phase was already executed on this node.
+     */
+    function node_is_inited(node) {
+        return !!(node[sym_mount_status] & NODE_IS_INITED);
+    }
+    /**
+     * Return `true` if the node is *considered* inserted in the document.
+     *
+     * There can be a slight variation between the result of this function and `node.isConnected`, since
+     * its status is potentially updated after the node was inserted or removed from the dom, or could
+     * have been forced to another value by a third party.
+     *
+     * @category dom, toc
+     */
+    function node_is_inserted(node) {
+        return !!(node[sym_mount_status] & NODE_IS_INSERTED);
+    }
+    /**
+     * Call init() functions on a node, and start its observers.
      * @category internal
      */
-    function node_init(node) {
-        node[sym_mount_status] = 'init';
-        // call init functions
-        var inits = node[sym_init];
-        if (inits) {
-            for (var i = 0, l = inits.length; i < l; i++) {
-                inits[i](node);
-            }
+    function node_do_init(node) {
+        // if there is anything in the status, it means the node was inited before,
+        // so we don't do that again.
+        if (!(node[sym_mount_status] & NODE_IS_INITED))
+            _node_call_cbks(node, sym_init);
+        if (!(node[sym_mount_status] & NODE_IS_OBSERVING))
+            // call init functions
+            _node_start_observers(node);
+        node[sym_mount_status] = NODE_IS_INITED | NODE_IS_OBSERVING;
+    }
+    function _apply_inserted(node) {
+        var st = node[sym_mount_status] || 0;
+        // init if it was not done
+        if (!(st & NODE_IS_INITED))
+            _node_call_cbks(node, sym_init);
+        // restart observers
+        if (!(st & NODE_IS_OBSERVING))
+            _node_start_observers(node);
+        // then, call inserted.
+        if (!(st & NODE_IS_INSERTED)) {
+            _node_call_cbks(node, sym_inserted);
         }
-        // start observers
-        var obs = node[sym_observers];
-        if (obs) {
-            for (var i = 0, l = obs.length; i < l; i++) {
-                obs[i].startObserving();
-            }
-        }
+        node[sym_mount_status] = NODE_IS_INITED | NODE_IS_INSERTED | NODE_IS_OBSERVING; // now inserted
     }
     /**
      * @category internal
      */
-    function node_inserted(node) {
-        var nodes = [node]; // the nodes we will have to tell they're inserted
+    function node_do_inserted(node) {
+        if (node[sym_mount_status] & NODE_IS_INSERTED)
+            return;
         var iter = node.firstChild;
         var stack = [];
         // We build here a stack where parents are added first and children last
+        _apply_inserted(node);
         while (iter) {
-            if (iter[sym_mount_status] !== 'inserted')
-                nodes.push(iter); // always push the current node
-            var first = iter.firstChild;
-            if (first) {
-                var next = iter.nextSibling; // where we'll pick up when we unstack.
-                if (next)
-                    stack.push(next);
-                iter = first; // we will keep going to the children
-                continue;
-            }
-            else if (iter.nextSibling) {
-                iter = iter.nextSibling;
-                continue;
-            }
-            else {
-                // no first child, no next sibling, just unpack the stack
-                iter = stack.pop();
-            }
-        }
-        // Call inserted on the node list we just built.
-        for (var i = 0, l = nodes.length; i < l; i++) {
-            var n = nodes[i];
-            n[sym_mount_status] = 'inserted'; // now inserted
-            var cbks = n[sym_inserted];
-            if (cbks) {
-                for (var j = 0, l = cbks.length; j < l; j++) {
-                    cbks[j](n, n.parentNode);
+            // we ignore an entire subtree if the node is already marked as inserted
+            // in all other cases, the node will be inserted
+            if (!(iter[sym_mount_status] & NODE_IS_INSERTED)) {
+                _apply_inserted(iter);
+                var first = iter.firstChild;
+                if (first) {
+                    var next = iter.nextSibling; // where we'll pick up when we unstack.
+                    if (next)
+                        stack.push(next);
+                    iter = first; // we will keep going to the children
+                    continue;
+                }
+                else if (iter.nextSibling) {
+                    iter = iter.nextSibling;
+                    continue;
                 }
             }
+            iter = stack.pop();
         }
     }
     /**
      * Apply unmount to a node.
      * @internal
      */
-    function _apply_deinit(node) {
-        var obs = node[sym_observers];
-        if (obs) {
-            for (var i = 0, l = obs.length; i < l; i++) {
-                obs[i].stopObserving();
-            }
+    function _apply_removed(node, prev_parent) {
+        var st = node[sym_mount_status];
+        if (st & NODE_IS_OBSERVING) {
+            _node_stop_observers(node);
+            st = st ^ NODE_IS_OBSERVING;
         }
-        node[sym_mount_status] = undefined;
-        var cbks = node[sym_deinit];
-        if (cbks) {
-            for (var j = 0, l = cbks.length; j < l; j++) {
-                cbks[j](node);
-            }
+        if (prev_parent && st & NODE_IS_INSERTED) {
+            _node_call_cbks(node, sym_removed);
+            st = st ^ NODE_IS_INSERTED;
         }
+        node[sym_mount_status] = st;
     }
     /**
-     * Call controller's unmount functions recursively
+     * Traverse the node tree of `node` and call the `deinit()` handlers, begininning by the leafs and ending
+     * on the root.
+     *
+     * If `prev_parent` is not supplied, then the `remove` is not run, but observers stop.
+     *
      * @category dom, toc
      */
-    function node_removed(node) {
-        const unmount = [];
+    function node_do_remove(node, prev_parent) {
         const node_stack = [];
         var iter = node.firstChild;
-        // We need to store all the nodes for which we'll call unmount() beforehand,
-        // as an unmount() handler may further remove nodes that were already
-        // unmounted from the DOM and which could be missed if we naively traversed
-        // the unmounted children.
-        //
-        // The array construction is done iteratively for performance considerations.
         while (iter) {
-            // Push firstChildren first
             while (iter.firstChild) {
                 node_stack.push(iter);
                 iter = iter.firstChild;
             }
-            unmount.push(iter);
-            // When we're here, we're on a terminal node, so
-            // we're going to have to process it.
-            while (iter && !iter.nextSibling) {
-                iter = node_stack.pop();
-                if (iter)
-                    unmount.push(iter);
-            }
+            _apply_removed(iter, prev_parent ? iter.parentNode : null);
+            if (prev_parent)
+                // When we're here, we're on a terminal node, so
+                // we're going to have to process it.
+                while (iter && !iter.nextSibling) {
+                    iter = node_stack.pop();
+                    if (iter)
+                        _apply_removed(iter, prev_parent ? iter.parentNode : null);
+                }
             // So now we're going to traverse the next node.
             iter = iter && iter.nextSibling;
         }
-        unmount.push(node);
-        for (var tuple of unmount) {
-            _apply_deinit(tuple);
-        }
+        _apply_removed(node, prev_parent);
     }
     /**
-     * Remove a `node` from the DOM and call `removed` on its mixins as well as `deinit` on itself
-     * and all its children's Mixins.
+     * Remove a `node` from the tree and call `removed` on its mixins and all the `removed` callbacks..
      *
-     * Prefer using it over `Node.removeChild` or `Node.remove()` as not unmounting Mixins will leave
-     * `#o.Observable`s still being watched and lead to memory leaks.
+     * This function is mostly used by verbs that don't want to wait for the mutation observer
+     * callback registered in [`setup_mutation_observer`](#setup_mutation_observer)
      *
-     * @param node The node to remove from the DOM
-     * @category dom, toc
+     * @category low level dom, toc
      */
     function remove_and_deinit(node) {
         const parent = node.parentNode;
         if (parent) {
-            node_removed(node);
-            var cbks = node[sym_removed];
-            if (cbks) {
-                for (var j = 0, l = cbks.length; j < l; j++) {
-                    cbks[j](node, parent);
-                }
-            }
             // (m as any).node = null
             parent.removeChild(node);
+            node_do_remove(node, parent);
         }
+        else {
+            node_do_remove(node, null); // just stop observers otherwise...
+        }
+    }
+    /**
+     * Setup the mutation observer that will be in charge of listening to document changes
+     * so that the `init`, `inserted` and `removed` life-cycle callbacks are called.
+     *
+     * This should be the first thing done at the top level of a project using ELT.
+     *
+     * If the code opens another window, it **must** use `setup_mutation_observer` on the newly created
+     * window's document or other `Node` that will hold the ELT application.
+     *
+     * This function also registers a listener on the `unload` event of the `document` or `ownerDocument`
+     * to stop all the observers when the window closes.
+     *
+     * ```tsx
+     * import { setup_mutation_observer, $inserted } from 'elt'
+     * // typically in the top-level app.tsx or index.tsx
+     * // setup_mutation_observer(document)
+     *
+     * // This example may require a popup permission from your browser.
+     * const new_window = window.open(undefined, '_blank', 'menubar=0,status=0,toolbar=0')
+     * if (new_window) {
+     *   setup_mutation_observer(new_window.document)
+     *   new_window.document.body.appendChild(<div>
+     *     {$inserted(() => console.log('inserted.'))}
+     *   </div>)
+     * }
+     *
+     *
+     * @category dom, toc
+     */
+    function setup_mutation_observer(node) {
+        var _a;
+        if (!node.isConnected && !!node.ownerDocument)
+            throw new Error(`cannot setup mutation observer on a Node that is not connected in a document`);
+        var obs = new MutationObserver(records => {
+            for (var i = 0, l = records.length; i < l; i++) {
+                var record = records[i];
+                for (var added = Array.from(record.addedNodes), j = 0, lj = added.length; j < lj; j++) {
+                    var added_node = added[j];
+                    // skip this node if it is already marked as inserted, as it means verbs already
+                    // have performed the mounting for this element
+                    if (added_node[sym_mount_status] & NODE_IS_INSERTED) {
+                        continue;
+                    }
+                    node_do_inserted(added_node);
+                }
+                for (var removed = Array.from(record.removedNodes), j = 0, lj = removed.length; j < lj; j++) {
+                    var removed_node = removed[j];
+                    node_do_remove(removed_node, record.target);
+                }
+            }
+        });
+        (_a = node.ownerDocument, (_a !== null && _a !== void 0 ? _a : node)).addEventListener('unload', ev => {
+            node_do_remove(node, null); // technically, the nodes were not removed, but we want to at least shut down all observers.
+            obs.disconnect();
+        });
+        // observe modifications to *all the tree*
+        obs.observe(node, {
+            childList: true,
+            subtree: true
+        });
+        return obs;
     }
     /**
      * Insert a `node` to a `parent`'s child list before `refchild`.
@@ -1457,7 +1551,7 @@
         }
         var iter = df.firstChild;
         while (iter) {
-            node_init(iter);
+            node_do_init(iter);
             iter = iter.nextSibling;
         }
         var first = df.firstChild;
@@ -1468,9 +1562,11 @@
         if (parent.isConnected && first && last) {
             iter = last;
             // we do it in reverse because Display and the likes do it from previous to next.
-            while (iter && iter !== first) {
+            while (iter) {
                 var next = iter.previousSibling;
-                node_inserted(iter);
+                node_do_inserted(iter);
+                if (iter === first)
+                    break;
                 iter = next;
             }
         }
@@ -1500,7 +1596,7 @@
         if (node[sym_observers] == undefined)
             node[sym_observers] = [];
         node[sym_observers].push(obser);
-        if (node[sym_mount_status])
+        if (node[sym_mount_status] & NODE_IS_OBSERVING)
             obser.startObserving(); // this *may* be a problem ? FIXME TODO
         // we might need to track the mounting status of a node.
         return obser;
@@ -1519,12 +1615,14 @@
      */
     function node_unobserve(node, obsfn) {
         var _a;
+        const is_observing = node[sym_mount_status] & NODE_IS_OBSERVING;
         node[sym_observers] = (_a = node[sym_observers]) === null || _a === void 0 ? void 0 : _a.filter(ob => {
             const res = ob === obsfn || ob.fn === obsfn;
-            if (res) {
+            if (res && is_observing) {
+                // stop the observer before removing it from the list if the node was observing
                 ob.stopObserving();
             }
-            return res;
+            return !res;
         });
     }
     /**
@@ -1636,43 +1734,37 @@
             node.setAttribute('class', name);
     }
     /**
-     * Register a callback that will run as soon as the node is created, but not yet in the DOM.
+     * Register a `callback` to be called for the life-cycle event `sym` on `node`.
+     * [`$init()`](#$init), [`$inserted()`](#inserted) and [`$removed()`](#$removed) are more commonly used, as well as the methods on [`Mixin`](#Mixin)
      *
-     * The node always has a parent ; most likely its future parent, but at times it can be
-     * a DocumentFragment used for node preparation.
+     * This is mostly used internally.
      *
-     * During this callback, you may thus not do anything that has to do with the dom as it stands,
-     * only `#node_observe` and some sibling node insertion/removal.
+     * ```tsx
+     * import { sym_inserted, node_on } from 'elt'
+     *
+     * var node = <div></div>
+     * node_on(node, sym_inserted, (node, parent) => console.log('inserted'))
+     *
+     * // the former is achieved more easily by doing that:
+     * import { $inserted } from 'elt'
+     * <div>
+     *   {$inserted((node, parent) => console.log('inserted'))}
+     * </div>
+     * ```
      *
      * @category dom, toc
      */
-    function node_on_init(node, fn) {
+    function node_on(node, sym, callback) {
         var _a;
-        (node[sym_init] = (_a = node[sym_init], (_a !== null && _a !== void 0 ? _a : []))).push(fn);
+        (node[sym] = (_a = node[sym], (_a !== null && _a !== void 0 ? _a : []))).push(callback);
     }
     /**
-     * Register a callback that will run when this node is added to the DOM
+     * Remove a previously associated `callback` from the life-cycle event `sym` for the `node`.
      * @category dom, toc
      */
-    function node_on_inserted(node, fn) {
+    function node_off(node, sym, callback) {
         var _a;
-        (node[sym_inserted] = (_a = node[sym_inserted], (_a !== null && _a !== void 0 ? _a : []))).push(fn);
-    }
-    /**
-     * Register a callback that will run when this node is removed from the DOM
-     * @category dom, toc
-     */
-    function node_on_deinit(node, fn) {
-        var _a;
-        (node[sym_deinit] = (_a = node[sym_deinit], (_a !== null && _a !== void 0 ? _a : []))).push(fn);
-    }
-    /**
-     * Register a callback that will run when this node is a direct target for removal from the DOM
-     * @category dom, toc
-     */
-    function node_on_removed(node, fn) {
-        var _a;
-        (node[sym_removed] = (_a = node[sym_removed], (_a !== null && _a !== void 0 ? _a : []))).push(fn);
+        (node[sym] = (_a = node[sym], (_a !== null && _a !== void 0 ? _a : []))).filter(f => f !== callback);
     }
     /**
      * Remove all the nodes after `start` until `until` (included), calling `removed` and `deinit` as needed.
@@ -1908,24 +2000,7 @@
      */
     function $init(fn) {
         return node => {
-            node_on_init(node, fn);
-        };
-    }
-    /**
-     * Call the specified function when the node is removed from the DOM.
-     *
-     * It is not the same as $removed, which is called when the node is a direct target
-     * of removal from a function such as `node_remove`.
-     *
-     * ```jsx
-     *  <div>{$deinit(node => console.log(`This node is now out of the DOM`))}</div>
-     * ```
-     *
-     * @category decorator, toc
-     */
-    function $deinit(fn) {
-        return (node) => {
-            node_on_deinit(node, fn);
+            node_on(node, sym_init, fn);
         };
     }
     /**
@@ -1942,29 +2017,27 @@
      */
     function $inserted(fn) {
         return (node) => {
-            node_on_inserted(node, fn);
+            node_on(node, sym_inserted, fn);
         };
     }
     /**
-     * Run a callback when the node is a direct target for removal from the document.
+     * Run a callback when the node is removed from its holding document.
      *
      * ```jsx
-     * $If(o_some_condition, () => <div>
+     * import { o, $removed } from 'elt'
+     * const o_some_condition = o(true)
+     *
+     * document.appendChild($If(o_some_condition, () => <div>
      *   {$removed((node, parent) => {
      *     console.log(`I was removed.`)
      *   })}
-     *   <div>
-     *      Subdiv
-     *      {$removed(() => console.log('I will not be displayed when o_some_condition becomes false'))}
-     *      {$deinit(() => console.log('However, I will'))}
-     *   </div>
-     * </div>)
+     * </div>))
      * ```
      * @category decorator, toc
      */
     function $removed(fn) {
         return (node) => {
-            node_on_removed(node, fn);
+            node_on(node, sym_removed, fn);
         };
     }
     var _noscrollsetup = false;
@@ -2035,6 +2108,8 @@
     class Mixin {
         constructor() {
             this.node = null;
+            /** @category internal */
+            this.__observers = [];
         }
         /**
          * Get a Mixin by its class on the given node or its parents.
@@ -2068,13 +2143,18 @@
             return null;
         }
         /**
+         * To be used with decorators
+         */
+        static onThisNode(cbk) {
+            return (node) => {
+            };
+        }
+        /**
          * Remove the mixin from this node. Observers created with `observe()` will
          * stop observing, but `removed()` will not be called.
          * @param node
          */
         removeFromNode() {
-            var _a, _b;
-            (_b = (_a = this).deinit) === null || _b === void 0 ? void 0 : _b.call(_a, this.node);
             node_remove_mixin(this.node, this);
             this.node = null; // we force the node to null to help with garbage collection.
         }
@@ -2091,6 +2171,10 @@
          */
         observe(obs, fn) {
             return node_observe(this.node, obs, fn);
+        }
+        unobserve(obs) {
+            this.__observers = this.__observers.filter(ob => obs !== ob && obs !== ob.fn);
+            return node_unobserve(this.node, obs);
         }
     }
     /**
@@ -2125,17 +2209,21 @@
      * ```
      */
     function node_add_mixin(node, mixin) {
-        mixin.next_mixin = node[sym_mixins];
+        mixin.__next_mixin = node[sym_mixins];
         node[sym_mixins] = mixin;
         mixin.node = node;
-        if (mixin.init)
-            node_on_init(node, mixin.init.bind(mixin));
-        if (mixin.deinit)
-            node_on_deinit(node, mixin.deinit.bind(mixin));
-        if (mixin.removed)
-            node_on_removed(node, mixin.removed.bind(mixin));
-        if (mixin.inserted)
-            node_on_inserted(node, mixin.inserted.bind(mixin));
+        if (mixin.init) {
+            mixin.init = mixin.init.bind(mixin);
+            node_on(node, sym_init, mixin.init);
+        }
+        if (mixin.removed) {
+            mixin.removed = mixin.removed.bind(mixin);
+            node_on(node, sym_removed, mixin.removed);
+        }
+        if (mixin.inserted) {
+            mixin.inserted = mixin.inserted.bind(mixin);
+            node_on(node, sym_inserted, mixin.inserted);
+        }
     }
     /**
      * Remove a Mixin from the array of mixins associated with this Node.
@@ -2144,18 +2232,32 @@
      */
     function node_remove_mixin(node, mixin) {
         var mx = node[sym_mixins];
+        var found = false;
         if (!mx)
             return;
         if (mx === mixin) {
-            node[sym_mixins] = mixin.next_mixin;
+            found = true;
+            node[sym_mixins] = mixin.__next_mixin;
         }
         else {
             var iter = mx;
             while (iter) {
-                if (iter.next_mixin === mixin) {
-                    iter.next_mixin = mixin.next_mixin;
-                    return;
+                if (iter.__next_mixin === mixin) {
+                    found = true;
+                    iter.__next_mixin = mixin.__next_mixin;
+                    break;
                 }
+            }
+        }
+        if (found) {
+            if (mixin.init)
+                node_off(node, sym_init, mixin.init);
+            if (mixin.inserted)
+                node_off(node, sym_inserted, mixin.inserted);
+            if (mixin.removed)
+                node_off(node, sym_removed, mixin.removed);
+            for (var ob of mixin.__observers) {
+                node_unobserve(node, ob);
             }
         }
     }
@@ -2218,10 +2320,6 @@
             // Insert the new comment before the end
             insert_before_and_init(this.node.parentNode, cts, this.end);
         }
-        removed(node, parent) {
-            this.clear();
-            parent.removeChild(this.end);
-        }
     }
     /**
      * Displays and actualises the content of an Observable containing
@@ -2240,6 +2338,18 @@
     /**
      * Write and update the string value of an observable value into
      * a Text node.
+     *
+     * This verb is used whenever an observable is passed as a child to a node.
+     *
+     * ```tsx
+     * import { o, $Display, $Fragment as $ } from 'elt'
+     *
+     * const o_text = o('text')
+     * document.body.appendChild(<$>
+     *   {o_text} is the same as {$Display(o_text)}
+     * </$>)
+     * ```
+     *
      * @category verb, toc
      */
     function $Display(obs) {
@@ -2251,7 +2361,7 @@
     /**
      * @category verb, toc
      *
-     * Display content depending on the value of a `condition`, which can be `#o.Observable`
+     * Display content depending on the value of a `condition`, which can be an observable.
      *
      * If `condition` is not an observable, then the call to `$If` is resolved immediately without using
      * an intermediary observable.
@@ -2312,157 +2422,6 @@
         $If.ConditionalDisplayer = ConditionalDisplayer;
     })($If || ($If = {}));
     /**
-     *  Repeats content.
-     * @category internal
-     */
-    class Repeater extends Mixin {
-        constructor(ob, renderfn, separator) {
-            super();
-            this.renderfn = renderfn;
-            this.separator = separator;
-            this.positions = [];
-            this.next_index = 0;
-            this.lst = [];
-            this.child_obs = [];
-            this.obs = o(ob);
-        }
-        init() {
-            this.observe(this.obs, lst => {
-                this.lst = lst || [];
-                const diff = lst.length - this.next_index;
-                if (diff < 0)
-                    this.removeChildren(-diff);
-                if (diff > 0)
-                    this.appendChildren(diff);
-            });
-        }
-        /**
-         * Generate the next element to append to the list.
-         */
-        next(fr) {
-            if (this.next_index >= this.lst.length)
-                return false;
-            // here, we *KNOW* it represents a defined value.
-            var ob = this.obs.p(this.next_index);
-            this.child_obs.push(ob);
-            if (this.separator && this.next_index > 0) {
-                fr.appendChild(get_node_from_insertable(this.separator(this.next_index)));
-            }
-            var node = get_node_from_insertable(this.renderfn(ob, this.next_index));
-            this.positions.push(node instanceof DocumentFragment ? node.lastChild : node);
-            fr.appendChild(node);
-            this.next_index++;
-            return true;
-        }
-        appendChildren(count) {
-            const parent = this.node.parentNode;
-            if (!parent)
-                return;
-            var fr = document.createDocumentFragment();
-            while (count-- > 0) {
-                if (!this.next(fr))
-                    break;
-            }
-            insert_before_and_init(parent, fr, this.node);
-        }
-        removeChildren(count) {
-            var _a;
-            if (this.next_index === 0 || count === 0)
-                return;
-            // Détruire jusqu'à la position concernée...
-            this.next_index = this.next_index - count;
-            node_remove_after((_a = this.positions[this.next_index - 1], (_a !== null && _a !== void 0 ? _a : this.node)), this.positions[this.positions.length - 1]);
-            this.child_obs = this.child_obs.slice(0, this.next_index);
-            this.positions = this.positions.slice(0, this.next_index);
-        }
-        removed() {
-            this.removeChildren(this.positions.length);
-        }
-    }
-    /**
-     * Repeats content and append it to the DOM until a certain threshold
-     * is meant. Use it with `scrollable()` on the parent..
-     * @category internal
-     */
-    class ScrollRepeater extends Repeater {
-        constructor(ob, renderfn, scroll_buffer_size = 10, threshold_height = 500, separator) {
-            super(ob, renderfn);
-            this.scroll_buffer_size = scroll_buffer_size;
-            this.threshold_height = threshold_height;
-            this.separator = separator;
-            this.parent = null;
-            this.onscroll = () => {
-                if (!this.parent)
-                    return;
-                this.appendChildren(0);
-            };
-        }
-        /**
-         * Append `count` children if the parent was not scrollable (just like Repeater),
-         * or append elements until we've added past the bottom of the container.
-         */
-        appendChildren(count) {
-            if (!this.parent)
-                // if we have no scrollable parent, just act like a regular repeater.
-                return super.appendChildren(count);
-            // Instead of appending all the count, break it down to bufsize packets.
-            const bufsize = this.scroll_buffer_size;
-            const p = this.parent;
-            const append = () => {
-                if (this.next_index < this.lst.length && p.scrollHeight - (p.clientHeight + p.scrollTop) < this.threshold_height) {
-                    super.appendChildren(bufsize);
-                    requestAnimationFrame(append);
-                }
-            };
-            // We do not try appending immediately ; some observables may modify current
-            // items height right after this function ends, which can lead to a situation
-            // where we had few elements that were very high and went past the threshold
-            // that would get very small suddenly, but since they didn't get the chance
-            // to do that, append stops because it is past the threshold right now and
-            // thus leaves a lot of blank space.
-            requestAnimationFrame(append);
-        }
-        init() {
-            requestAnimationFrame(() => {
-                // do not process this if the node is not inserted.
-                if (!this.node.isConnected)
-                    return;
-                // Find parent with the overflow-y
-                var iter = this.node.parentElement;
-                while (iter) {
-                    var style = getComputedStyle(iter);
-                    if (style.overflowY === 'auto' || style.msOverflowY === 'auto' || style.msOverflowY === 'scrollbar') {
-                        this.parent = iter;
-                        break;
-                    }
-                    iter = iter.parentElement;
-                }
-                if (!this.parent) {
-                    console.warn(`Scroll repeat needs a parent with overflow-y: auto`);
-                    this.appendChildren(0);
-                    return;
-                }
-                this.parent.addEventListener('scroll', this.onscroll);
-                this.observe(this.obs, lst => {
-                    this.lst = lst || [];
-                    const diff = lst.length - this.next_index;
-                    if (diff < 0)
-                        this.removeChildren(-diff);
-                    if (diff > 0)
-                        this.appendChildren(0);
-                });
-            });
-        }
-        removed() {
-            super.removed();
-            // remove Scrolling
-            if (!this.parent)
-                return;
-            this.parent.removeEventListener('scroll', this.onscroll);
-            this.parent = null;
-        }
-    }
-    /**
      * @category verb, toc
      *
      * Repeats the `render` function for each element in `ob`, optionally separating each rendering
@@ -2499,8 +2458,76 @@
             }
             return get_node_from_insertable(final);
         }
-        return e(document.createComment('$Repeat'), new Repeater(ob, render, separator));
+        return e(document.createComment('$Repeat'), new $Repeat.Repeater(ob, render, separator));
     }
+    (function ($Repeat) {
+        /**
+         *  Repeats content.
+         * @category internal
+         */
+        class Repeater extends Mixin {
+            constructor(ob, renderfn, separator) {
+                super();
+                this.renderfn = renderfn;
+                this.separator = separator;
+                this.positions = [];
+                this.next_index = 0;
+                this.lst = [];
+                this.child_obs = [];
+                this.obs = o(ob);
+            }
+            init() {
+                this.observe(this.obs, lst => {
+                    this.lst = lst || [];
+                    const diff = lst.length - this.next_index;
+                    if (diff < 0)
+                        this.removeChildren(-diff);
+                    if (diff > 0)
+                        this.appendChildren(diff);
+                });
+            }
+            /**
+             * Generate the next element to append to the list.
+             */
+            next(fr) {
+                if (this.next_index >= this.lst.length)
+                    return false;
+                // here, we *KNOW* it represents a defined value.
+                var ob = this.obs.p(this.next_index);
+                this.child_obs.push(ob);
+                if (this.separator && this.next_index > 0) {
+                    fr.appendChild(get_node_from_insertable(this.separator(this.next_index)));
+                }
+                var node = get_node_from_insertable(this.renderfn(ob, this.next_index));
+                this.positions.push(node instanceof DocumentFragment ? node.lastChild : node);
+                fr.appendChild(node);
+                this.next_index++;
+                return true;
+            }
+            appendChildren(count) {
+                const parent = this.node.parentNode;
+                if (!parent)
+                    return;
+                var fr = document.createDocumentFragment();
+                while (count-- > 0) {
+                    if (!this.next(fr))
+                        break;
+                }
+                insert_before_and_init(parent, fr, this.node);
+            }
+            removeChildren(count) {
+                var _a;
+                if (this.next_index === 0 || count === 0)
+                    return;
+                // Détruire jusqu'à la position concernée...
+                this.next_index = this.next_index - count;
+                node_remove_after((_a = this.positions[this.next_index - 1], (_a !== null && _a !== void 0 ? _a : this.node)), this.positions[this.positions.length - 1]);
+                this.child_obs = this.child_obs.slice(0, this.next_index);
+                this.positions = this.positions.slice(0, this.next_index);
+            }
+        }
+        $Repeat.Repeater = Repeater;
+    })($Repeat || ($Repeat = {}));
     /**
      * Similarly to `$Repeat`, `$RepeatScroll` repeats the `render` function for each element in `ob`,
      * optionally separated by the results of `separator`, until the elements overflow past the
@@ -2518,10 +2545,95 @@
      *
      * @category verb, toc
      */
-    function $RepeatScroll(ob, render, separator, scroll_buffer_size = 10) {
+    function $RepeatScroll(ob, render, options = {}) {
         // we cheat the typesystem, which is not great, but we know what we're doing.
-        return e(document.createComment('$RepeatScroll'), new ScrollRepeater(o(ob), render, scroll_buffer_size, 500, separator));
+        return e(document.createComment('$RepeatScroll'), new $RepeatScroll.ScrollRepeater(o(ob), render, options));
     }
+    (function ($RepeatScroll) {
+        /**
+         * Repeats content and append it to the DOM until a certain threshold
+         * is meant. Use it with `scrollable()` on the parent..
+         * @category internal
+         */
+        class ScrollRepeater extends $Repeat.Repeater {
+            constructor(ob, renderfn, options) {
+                var _a, _b;
+                super(ob, renderfn);
+                this.options = options;
+                this.parent = null;
+                this.scroll_buffer_size = (_a = this.options.scroll_buffer_size, (_a !== null && _a !== void 0 ? _a : 10));
+                this.threshold_height = (_b = this.options.threshold_height, (_b !== null && _b !== void 0 ? _b : 500));
+                this.separator = this.options.separator;
+                this.onscroll = () => {
+                    if (!this.parent)
+                        return;
+                    this.appendChildren();
+                };
+            }
+            /**
+             * Append `count` children if the parent was not scrollable (just like Repeater),
+             * or append elements until we've added past the bottom of the container.
+             */
+            appendChildren() {
+                if (!this.parent)
+                    // if we have no scrollable parent (yet, if just inited), then just append items
+                    return super.appendChildren(this.scroll_buffer_size);
+                // Instead of appending all the count, break it down to bufsize packets.
+                const bufsize = this.scroll_buffer_size;
+                const p = this.parent;
+                const append = () => {
+                    if (this.next_index < this.lst.length && p.scrollHeight - (p.clientHeight + p.scrollTop) < this.threshold_height) {
+                        super.appendChildren(bufsize);
+                        requestAnimationFrame(append);
+                    }
+                };
+                // We do not try appending immediately ; some observables may modify current
+                // items height right after this function ends, which can lead to a situation
+                // where we had few elements that were very high and went past the threshold
+                // that would get very small suddenly, but since they didn't get the chance
+                // to do that, append stops because it is past the threshold right now and
+                // thus leaves a lot of blank space.
+                requestAnimationFrame(append);
+            }
+            inserted() {
+                // do not process this if the node is not inserted.
+                if (!this.node.isConnected)
+                    return;
+                // Find parent with the overflow-y
+                var iter = this.node.parentElement;
+                while (iter) {
+                    var style = getComputedStyle(iter);
+                    if (style.overflowY === 'auto' || style.msOverflowY === 'auto' || style.msOverflowY === 'scrollbar') {
+                        this.parent = iter;
+                        break;
+                    }
+                    iter = iter.parentElement;
+                }
+                if (!this.parent) {
+                    console.warn(`Scroll repeat needs a parent with overflow-y: auto`);
+                    this.appendChildren();
+                    return;
+                }
+                this.parent.addEventListener('scroll', this.onscroll);
+                this.observe(this.obs, lst => {
+                    this.lst = lst || [];
+                    const diff = lst.length - this.next_index;
+                    if (diff < 0)
+                        this.removeChildren(-diff);
+                    if (diff > 0)
+                        this.appendChildren();
+                });
+            }
+            removed() {
+                // remove Scrolling
+                if (!this.parent)
+                    return;
+                this.parent.removeEventListener('scroll', this.onscroll);
+                this.parent = null;
+            }
+        }
+        $RepeatScroll.ScrollRepeater = ScrollRepeater;
+    })($RepeatScroll || ($RepeatScroll = {}));
     function $Switch(obs) {
         return new $Switch.Switcher(obs);
     }
@@ -2679,15 +2791,32 @@
         for (i = 0, l = mixins.length; i < l; i++) {
             node_add_mixin(node, mixins[i]);
         }
-        // If the node was connected (ie, we called e() with an existing node like document.body), then
-        // we have to call inserted on it.
-        if (node.isConnected) {
-            node_inserted(node);
-        }
         return node;
     }
     /**
-     * Creates a document fragment. Typescript's JSX is configured to use this
+     * Creates a document fragment.
+     *
+     * The JSX namespace points `JSX.Fragment` to this function.
+     *
+     * While it is a "valid" component in the eyes of ELT, no life-cycle event will ever be triggered
+     * on a `$Fragment`.
+     *
+     * ```tsx
+     * // If using jsxFactory, you have to import $Fragment and use it
+     * import { $Fragment as $ } from 'elt'
+     *
+     * document.body.appendChild(<$>
+     *   <p>Content</p>
+     *   <p>More Content</p>
+     * </$>)
+     *
+     * // If using jsxNamespace as "e" or "E", the following works out of the box
+     * document.body.appendChild(<>
+     *   <p>Content</p>
+     *   <p>More Content</p>
+     * </>)
+     *
+     * ```
      *
      * @category dom, toc
      */
@@ -3408,7 +3537,6 @@
     exports.$Switch = $Switch;
     exports.$class = $class;
     exports.$click = $click;
-    exports.$deinit = $deinit;
     exports.$id = $id;
     exports.$init = $init;
     exports.$inserted = $inserted;
@@ -3424,31 +3552,30 @@
     exports.Component = Component;
     exports.Displayer = Displayer;
     exports.Mixin = Mixin;
-    exports.Repeater = Repeater;
-    exports.ScrollRepeater = ScrollRepeater;
     exports.append_child_and_init = append_child_and_init;
     exports.e = e;
     exports.get_node_from_insertable = get_node_from_insertable;
     exports.insert_before_and_init = insert_before_and_init;
     exports.node_add_event_listener = node_add_event_listener;
     exports.node_add_mixin = node_add_mixin;
-    exports.node_init = node_init;
-    exports.node_inserted = node_inserted;
+    exports.node_do_init = node_do_init;
+    exports.node_do_inserted = node_do_inserted;
+    exports.node_do_remove = node_do_remove;
+    exports.node_is_inited = node_is_inited;
+    exports.node_is_inserted = node_is_inserted;
+    exports.node_is_observing = node_is_observing;
     exports.node_observe = node_observe;
     exports.node_observe_attribute = node_observe_attribute;
     exports.node_observe_class = node_observe_class;
     exports.node_observe_style = node_observe_style;
-    exports.node_on_deinit = node_on_deinit;
-    exports.node_on_init = node_on_init;
-    exports.node_on_inserted = node_on_inserted;
-    exports.node_on_removed = node_on_removed;
+    exports.node_off = node_off;
+    exports.node_on = node_on;
     exports.node_remove_after = node_remove_after;
     exports.node_remove_mixin = node_remove_mixin;
-    exports.node_removed = node_removed;
     exports.node_unobserve = node_unobserve;
     exports.o = o;
     exports.remove_and_deinit = remove_and_deinit;
-    exports.sym_deinit = sym_deinit;
+    exports.setup_mutation_observer = setup_mutation_observer;
     exports.sym_init = sym_init;
     exports.sym_inserted = sym_inserted;
     exports.sym_mixins = sym_mixins;
