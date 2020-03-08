@@ -947,12 +947,14 @@
             /**
              * Observe and Observable and return the observer that was created
              */
-            observe(obs, fn) {
+            observe(obs, fn, observer_callback) {
+                var _a;
                 if (!(obs instanceof Observable)) {
                     fn(obs, new Changes(obs));
                     return null;
                 }
                 const observer = o(obs).createObserver(fn);
+                (_a = observer_callback) === null || _a === void 0 ? void 0 : _a(observer);
                 return this.addObserver(observer);
             }
             /**
@@ -967,7 +969,7 @@
             /**
              * Remove the observer from this group
              */
-            remove(observer) {
+            unobserve(observer) {
                 const idx = this.observers.indexOf(observer);
                 if (idx > -1) {
                     if (this.live)
@@ -1255,8 +1257,8 @@
     })(exports.tf || (exports.tf = {}));
 
     /**
-     * Symbol property on `Node` to an array of observers that are started when the node is `init()` and
-     * stopped on `deinit()`.
+     * Symbol property on `Node` to an array of observers that are started when the node is `init()` or `inserted()` and
+     * stopped on `removed()`.
      * @category low level dom, toc
      */
     const sym_observers = Symbol('elt-observers');
@@ -1295,28 +1297,59 @@
     const NODE_IS_INSERTED = 0x10;
     const NODE_IS_OBSERVING = 0x100;
     function _node_call_cbks(node, sym, parent) {
+        var _a, _b, _c, _d, _e, _f;
         var cbks = node[sym];
-        if (!cbks)
-            return;
         parent = (parent !== null && parent !== void 0 ? parent : node.parentNode);
-        for (var i = 0, l = cbks.length; i < l; i++) {
-            cbks[i](node, parent);
+        if (cbks) {
+            for (var i = 0, l = cbks.length; i < l; i++) {
+                cbks[i](node, parent);
+            }
+        }
+        var mx = node[sym_mixins];
+        if (mx) {
+            if (sym === sym_init) {
+                for (i = 0, l = mx.length; i < l; i++) {
+                    (_b = (_a = mx[i]).init) === null || _b === void 0 ? void 0 : _b.call(_a, node, parent);
+                }
+            }
+            else if (sym === sym_inserted) {
+                for (i = 0, l = mx.length; i < l; i++) {
+                    (_d = (_c = mx[i]).inserted) === null || _d === void 0 ? void 0 : _d.call(_c, node, parent);
+                }
+            }
+            else if (sym === sym_removed) {
+                for (i = 0, l = mx.length; i < l; i++) {
+                    (_f = (_e = mx[i]).removed) === null || _f === void 0 ? void 0 : _f.call(_e, node, parent);
+                }
+            }
         }
     }
     function _node_start_observers(node) {
         var obs = node[sym_observers];
-        if (!obs)
-            return;
-        for (var i = 0, l = obs.length; i < l; i++) {
-            obs[i].startObserving();
+        if (obs) {
+            for (var i = 0, l = obs.length; i < l; i++) {
+                obs[i].startObserving();
+            }
+        }
+        var mx = node[sym_mixins];
+        if (mx) {
+            for (i = 0, l = mx.length; i < l; i++) {
+                mx[i].startObservers();
+            }
         }
     }
     function _node_stop_observers(node) {
         var obs = node[sym_observers];
-        if (!obs)
-            return;
-        for (var i = 0, l = obs.length; i < l; i++) {
-            obs[i].stopObserving();
+        if (obs) {
+            for (var i = 0, l = obs.length; i < l; i++) {
+                obs[i].stopObserving();
+            }
+        }
+        var mx = node[sym_mixins];
+        if (mx) {
+            for (i = 0, l = mx.length; i < l; i++) {
+                mx[i].stopObservers();
+            }
         }
     }
     /**
@@ -1421,10 +1454,10 @@
         node[sym_mount_status] = st;
     }
     /**
-     * Traverse the node tree of `node` and call the `deinit()` handlers, begininning by the leafs and ending
+     * Traverse the node tree of `node` and call the `removed()` handlers, begininning by the leafs and ending
      * on the root.
      *
-     * If `prev_parent` is not supplied, then the `remove` is not run, but observers stop.
+     * If `prev_parent` is not supplied, then the `removed` is not run, but observers are stopped.
      *
      * @category internal
      */
@@ -1457,7 +1490,7 @@
      *
      * @category low level dom, toc
      */
-    function remove_and_deinit(node) {
+    function remove_node(node) {
         const parent = node.parentNode;
         if (parent) {
             // (m as any).node = null
@@ -1487,12 +1520,13 @@
      *
      * ```tsx
      * import { o, setup_mutation_observer, $inserted, $observe } from 'elt'
-     * // typically in the top-level app.tsx or index.tsx
+     * // typically in the top-level app.tsx or index.tsx of your project :
      * // setup_mutation_observer(document)
      *
      * const o_test = o(1)
      *
      * // This example may require a popup permission from your browser.
+     * // Upon closing the window, the console.log will stop.
      * const new_window = window.open(undefined, '_blank', 'menubar=0,status=0,toolbar=0')
      * if (new_window) {
      *   setup_mutation_observer(new_window.document)
@@ -1606,23 +1640,29 @@
      *
      * @category low level dom, toc
      */
-    function node_observe(node, obs, obsfn) {
+    function node_observe(node, obs, obsfn, observer_callback) {
         if (!(o.isReadonlyObservable(obs))) {
             obsfn(obs, new o.Changes(obs));
             return null;
         }
         // Create the observer and append it to the observer array of the node
         var obser = obs.createObserver(obsfn);
+        if (observer_callback)
+            observer_callback(obser);
+        node_add_observer(node, obser);
+        return obser;
+    }
+    function node_add_observer(node, observer) {
         if (node[sym_observers] == undefined)
             node[sym_observers] = [];
-        node[sym_observers].push(obser);
+        node[sym_observers].push(observer);
         if (node[sym_mount_status] & NODE_IS_OBSERVING)
-            obser.startObserving(); // this *may* be a problem ? FIXME TODO
-        // we might need to track the mounting status of a node.
-        return obser;
+            observer.startObserving();
     }
     function node_add_event_listener(node, ev, listener) {
         if (Array.isArray(ev))
+            // we have to force typescript's hands on the listener typing, as we **know** for certain that current_target
+            // is the right type here.
             for (var e of ev)
                 node.addEventListener(e, listener);
         else {
@@ -1787,7 +1827,7 @@
         (node[sym] = (_a = node[sym], (_a !== null && _a !== void 0 ? _a : []))).filter(f => f !== callback);
     }
     /**
-     * Remove all the nodes after `start` until `until` (included), calling `removed` and `deinit` as needed.
+     * Remove all the nodes after `start` until `until` (included), calling `removed` and stopping observables as needed.
      * @category low level dom, toc
      */
     function node_remove_after(start, until) {
@@ -1795,7 +1835,7 @@
             return;
         var next;
         while ((next = start.nextSibling)) {
-            remove_and_deinit(next);
+            remove_node(next);
             if (next === until)
                 break;
         }
@@ -1817,14 +1857,42 @@
         }
         /**
          * Bind an observable to an input's value.
-         * @category decorator, toc
+         *
+         * ```tsx
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
+         * const o_string = o('stuff')
+         *
+         * document.body.appendChild(<$>
+         *   <input type="text">
+         *     {$bind.string(o_string)}
+         *   </input> / {o_string}
+         * </$>)
+         * ```
+         *
+         * @category dom, toc
          */
         function string(obs) {
             return setup_bind(obs, node => node.value, (node, value) => node.value = value);
         }
         $bind.string = string;
         /**
-         * @category decorator, toc
+         * Bind a string observable to an html element which is contenteditable.
+         *
+         * ```tsx
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
+         * const o_contents = o('Hello <b>World</b> !')
+         *
+         * document.body.appendChild(<$>
+         *   <div contenteditable='true'>
+         *      {$bind.contenteditable(o_contents, true)}
+         *   </div>
+         *   <pre><code style={{whiteSpace: 'pre-wrap'}}>{o_contents}</code></pre>
+         * </$>)
+         * ```
+         *
+         * @category dom, toc
          */
         function contenteditable(obs, as_html) {
             return setup_bind(obs, node => as_html ? node.innerHTML : node.innerText, (node, value) => {
@@ -1838,7 +1906,22 @@
         }
         $bind.contenteditable = contenteditable;
         /**
-         * @category decorator, toc
+         * Bind a number observable to an <input type="number"/>. Most likely won't work on anything else
+         * and will set the value to `NaN`.
+         *
+         * ```tsx
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
+         * const o_number = o(1)
+         *
+         * document.body.appendChild(<$>
+         *   <input type="number">
+         *     {$bind.number(o_number)}
+         *   </input> / {o_number}
+         * </$>)
+         * ```
+         *
+         * @category dom, toc
          */
         function number(obs) {
             return setup_bind(obs, node => node.valueAsNumber, (node, value) => node.valueAsNumber = value);
@@ -1849,11 +1932,19 @@
          * type `"date"` `"datetime"` `"datetime-local"`.
          *
          * ```tsx
-         * const o_d = o(new Date() as Date | null)
-         * <input type="date">{$bind.date(o_d)}</input>
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
+         * const o_date = o(null as Date | null)
+         * const dtf = Intl.DateTimeFormat('fr')
+         *
+         * document.body.appendChild(<$>
+         *   <input type="date">
+         *      {$bind.date(o_date)}
+         *   </input> - {o_date.tf(d => d ? dtf.format(d) : 'null')}
+         * </$>)
          * ```
          *
-         * @category decorator, toc
+         * @category dom, toc
          */
         function date(obs) {
             return setup_bind(obs, node => node.valueAsDate, (node, value) => node.valueAsDate = value);
@@ -1864,18 +1955,42 @@
          * is "radio" or "checkbox".
          *
          * ```tsx
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
          * const o_bool = o(false)
-         * <input type="checkbox">{$bind.boolean(o_bool)}</input>
+         *
+         * document.body.appendChild(<$>
+         *   <input type="checkbox">
+         *      {$bind.boolean(o_bool)}
+         *   </input> - {o_bool.tf(b => b ? 'true' : 'false')}
+         * </$>)
          * ```
          *
-         * @category decorator, toc
+         * @category dom, toc
          */
         function boolean(obs) {
             return setup_bind(obs, node => node.checked, (node, value) => node.checked = value, 'change');
         }
         $bind.boolean = boolean;
         /**
-         * @category decorator, toc
+         * Bind a number observable to the selected index of a select element
+         *
+         * ```tsx
+         * import { o, $bind, $Fragment as $ } from 'elt'
+         *
+         * const o_selected = o(-1)
+         *
+         * document.body.appendChild(<$>
+         *   <select>
+         *      {$bind.selected_index(o_selected)}
+         *      <option>one</option>
+         *      <option>two</option>
+         *      <option>three</option>
+         *   </select> / {o_selected}
+         * </$>)
+         * ```
+         *
+         * @category dom, toc
          */
         function selected_index(obs) {
             return setup_bind(obs, node => node.selectedIndex, (node, value) => node.selectedIndex = value);
@@ -1897,7 +2012,7 @@
      * )
      * ```
      *
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $props(props) {
         var keys = Object.keys(props);
@@ -1915,7 +2030,54 @@
         };
     }
     /**
-     * @category decorator, toc
+     * Observe one or several class definition, where a class definition is either
+     *  - A `o.RO<string>`
+     *  - An object which keys are class names and values are `o.RO<any>` and whose truthiness
+     *    determine the inclusion of the class on the target element.
+     *
+     * ```tsx
+     * import { $class, o, $Fragment as $, $bind } from 'elt'
+     *
+     * const o_cls = o('class2')
+     * const o_bool = o(false)
+     *
+     * document.body.appendChild(<$>
+     *   <style>
+     *     {`.class1 {
+     *        text-decoration: underline;
+     *     }
+     *     .class2 {
+     *        background: #f99;
+     *     }
+     *     .class3 {
+     *        font-weight: bold;
+     *     }
+     *     .class4 {
+     *        background: #99f;
+     *     }
+     *   `}
+     *   </style>
+     *   <input id='class3' type="checkbox">
+     *     {$bind.boolean(o_bool)}
+     *   </input> <label for='class3'>Class 3</label>
+     *   <input id='class2and4' type='checkbox'>
+     *
+     *
+     *   <div>
+     *     {$class('class1', o_cls, {class3: o_bool})}
+     *     content 1
+     *   </div>
+     *   <div>$class and class= are equivalent</div>
+     *   <div class={['class1', o_cls, {class3: o_bool}]}>
+     *     content 2
+     *   </div>
+     *   {E.$DIV(
+     *     $class('class1', o_cls, {class3: o_bool}),
+     *     'content 3'
+     *   )}
+     * </$>)
+     * ```
+     * @category dom, toc
      */
     function $class(...clss) {
         return (node) => {
@@ -1933,7 +2095,7 @@
      *
      * > **Note**: You can use the `id` attribute on any element, be them Components or regular nodes, as it is forwarded.
      *
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $id(id) {
         return (node) => {
@@ -1950,7 +2112,7 @@
      *   $title('hello there !')
      * )
      * ```
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $title(title) {
         return (node) => {
@@ -1967,7 +2129,7 @@
      * )
      * ```
      *
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $style(...styles) {
         return (node) => {
@@ -1978,15 +2140,12 @@
     }
     /**
      * Observe an observable and tie the observation to the node this is added to
-     * @category decorator, toc
+     * @category dom, toc
      */
     // export function $observe<T>(a: o.Observer<T>): Decorator<Node>
     function $observe(a, cbk, obs_cbk) {
-        // export function $observe<T>(a: any, cbk?: any): Decorator<Node> {
-        return node => {
-            var res = node_observe(node, a, (nval, chg) => cbk(nval, chg, node));
-            if (res && obs_cbk)
-                obs_cbk(res);
+        return (node) => {
+            node_observe(node, a, (nval, chg) => cbk(nval, chg, node), obs_cbk);
         };
     }
     function $on(event, _listener, useCapture = false) {
@@ -2003,7 +2162,7 @@
     /**
      * Add a callback on the click event, or touchend if we are on a mobile
      * device.
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $click(cbk, capture) {
         return function $click(node) {
@@ -2016,7 +2175,7 @@
      * ```jsx
      *  <MyComponent>{$init(node => console.log(`This node was just created and its observers are now live`))}</MyComponent>
      * ```
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $init(fn) {
         return node => {
@@ -2033,7 +2192,7 @@
      * })}</div>)
      * ```
      *
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $inserted(fn) {
         return (node) => {
@@ -2053,36 +2212,23 @@
      *   })}
      * </div>))
      * ```
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $removed(fn) {
         return (node) => {
             node_on(node, sym_removed, fn);
         };
     }
-    var _noscrollsetup = false;
-    /**
-     * Used by the `scrollable()` decorator
-     */
-    function _setUpNoscroll() {
-        document.body.addEventListener('touchmove', function event(ev) {
-            // If no div marked as scrollable set the moving attribute, then simply don't scroll.
-            if (!ev.scrollable)
-                ev.preventDefault();
-        }, false);
-        _noscrollsetup = true;
-    }
     /**
      * Setup scroll so that touchstart and touchmove events don't
      * trigger the ugly scroll band on mobile devices.
      *
      * Calling this functions makes anything not marked scrollable as non-scrollable.
-     * @category decorator, toc
+     * @category dom, toc
      */
     function $scrollable() {
         return (node) => {
-            if (!_noscrollsetup)
-                _setUpNoscroll();
+            $scrollable.setUpNoscroll(node.ownerDocument);
             var style = node.style;
             style.overflowY = 'auto';
             style.overflowX = 'auto';
@@ -2097,10 +2243,29 @@
             });
             node_add_event_listener(node, 'touchmove', ev => {
                 if (ev.currentTarget.offsetHeight < ev.currentTarget.scrollHeight)
-                    ev.scrollable = true;
+                    ev[$scrollable.sym_letscroll] = true;
             });
         };
     }
+    (function ($scrollable) {
+        const documents_wm = new WeakMap();
+        $scrollable.sym_letscroll = Symbol('elt-scrollstop');
+        /**
+         * Used by the `scrollable()` decorator
+         * @category internal
+         */
+        function setUpNoscroll(dc) {
+            if (documents_wm.has(dc))
+                return;
+            dc.body.addEventListener('touchmove', function event(ev) {
+                // If no handler has "marked" the event as being allowed to scroll, then
+                // just stop the scroll.
+                if (!ev[$scrollable.sym_letscroll])
+                    ev.preventDefault();
+            }, false);
+        }
+        $scrollable.setUpNoscroll = setUpNoscroll;
+    })($scrollable || ($scrollable = {}));
 
     /**
      * A `Mixin` is an object that is tied to a DOM Node and its lifecycle. This class
@@ -2125,11 +2290,10 @@
      * `removed()` call.
      * @category dom, toc
      */
-    class Mixin {
+    class Mixin extends o.ObserverHolder {
         constructor() {
+            super(...arguments);
             this.node = null;
-            /** @category internal */
-            this.__observers = [];
         }
         /**
          * Get a Mixin by its class on the given node or its parents.
@@ -2186,16 +2350,6 @@
                     this.node.addEventListener(n, (ev) => listener(ev), useCapture);
                 }
         }
-        /**
-         * Observe and Observable and return the observer that was created
-         */
-        observe(obs, fn) {
-            return node_observe(this.node, obs, fn);
-        }
-        unobserve(obs) {
-            this.__observers = this.__observers.filter(ob => obs !== ob && obs !== ob.fn);
-            return node_unobserve(this.node, obs);
-        }
     }
     /**
      * The Component is the core class of your TSX components.
@@ -2229,21 +2383,9 @@
      * ```
      */
     function node_add_mixin(node, mixin) {
-        mixin.__next_mixin = node[sym_mixins];
-        node[sym_mixins] = mixin;
+        var _a;
+        (node[sym_mixins] = (_a = node[sym_mixins], (_a !== null && _a !== void 0 ? _a : []))).push(mixin);
         mixin.node = node;
-        if (mixin.init) {
-            mixin.init = mixin.init.bind(mixin);
-            node_on(node, sym_init, mixin.init);
-        }
-        if (mixin.removed) {
-            mixin.removed = mixin.removed.bind(mixin);
-            node_on(node, sym_removed, mixin.removed);
-        }
-        if (mixin.inserted) {
-            mixin.inserted = mixin.inserted.bind(mixin);
-            node_on(node, sym_inserted, mixin.inserted);
-        }
     }
     /**
      * Remove a Mixin from the array of mixins associated with this Node.
@@ -2252,33 +2394,13 @@
      */
     function node_remove_mixin(node, mixin) {
         var mx = node[sym_mixins];
-        var found = false;
         if (!mx)
             return;
-        if (mx === mixin) {
-            found = true;
-            node[sym_mixins] = mixin.__next_mixin;
-        }
-        else {
-            var iter = mx;
-            while (iter) {
-                if (iter.__next_mixin === mixin) {
-                    found = true;
-                    iter.__next_mixin = mixin.__next_mixin;
-                    break;
-                }
-            }
-        }
-        if (found) {
-            if (mixin.init)
-                node_off(node, sym_init, mixin.init);
-            if (mixin.inserted)
-                node_off(node, sym_inserted, mixin.inserted);
-            if (mixin.removed)
-                node_off(node, sym_removed, mixin.removed);
-            for (var ob of mixin.__observers) {
-                node_unobserve(node, ob);
-            }
+        var idx = mx.indexOf(mixin);
+        if (idx)
+            mx.splice(idx, 1);
+        if (idx > -1) {
+            mixin.stopObservers();
         }
     }
 
@@ -2289,7 +2411,7 @@
      * A subclass of `#Verb` made to store nodes between two comments.
      *
      * Can be used as a base to build verbs more easily.
-     * @category verb, toc
+     * @category dom, toc
      */
     var cmt_count = 0;
     class CommentContainer extends Mixin {
@@ -2343,7 +2465,7 @@
      * </$>)
      * ```
      *
-     * @category verb, toc
+     * @category low level dom, toc
      */
     function $Display(obs) {
         if (!(obs instanceof o.Observable)) {
@@ -2352,7 +2474,7 @@
         return e(document.createComment('$Display'), new Displayer(obs));
     }
     /**
-     * @category verb, toc
+     * @category dom, toc
      *
      * Display content depending on the value of a `condition`, which can be an observable.
      *
@@ -2374,6 +2496,28 @@
      *   // which is why we can safely use .p('a') without typescript complaining
      *   o_truthy => <>{o_truthy.p('a')}
      * )
+     * ```
+     *
+     * ```tsx
+     *  import { o, $If, $click } from 'elt'
+     *
+     *  const o_some_obj = o({prop: 'value!'} as {prop: string} | null)
+     *
+     *  document.body.appendChild(<div>
+     *    <h1>An $If example</h1>
+     *    <div><button>
+     *     {$click(() => {
+     *       o_some_obj.mutate(v => !!v ? null : {prop: 'clicked'})
+     *     })}
+     *     Inverse
+     *   </button></div>
+     *   {$If(o_some_obj,
+     *     // Here, o_truthy is of type Observable<{prop: string}>, without the null
+     *     // We can thus safely take its property, which is a Renderable (string), through the .p() method.
+     *     o_truthy => <div>We have a {o_truthy.p('prop')}</div>,
+     *     () => <div>Value is null</div>
+     *   )}
+     *  </div>)
      * ```
      */
     function $If(condition, display, display_otherwise) {
@@ -2415,7 +2559,7 @@
         $If.ConditionalDisplayer = ConditionalDisplayer;
     })($If || ($If = {}));
     /**
-     * @category verb, toc
+     * @category dom, toc
      *
      * Repeats the `render` function for each element in `ob`, optionally separating each rendering
      * with the result of the `separator` function.
@@ -2427,15 +2571,20 @@
      * right away and only once.
      *
      * ```tsx
+     * import { o, $Repeat, $click } from 'elt'
+     *
      * const o_mylist = o(['hello', 'world'])
      *
-     * <div>
-     *   {Repeat(
+     * document.body.appendChild(<div>
+     *   {$Repeat(
      *      o_mylist,
-     *      o_item => <Button click={event => o_item.mutate(value => value + '!')}/>,
-     *      () => <div class='separator'/> // this div will be inserted between each button.
+     *      o_item => <button>
+     *        {$click(ev => o_item.mutate(value => value + '!'))}
+     *        {o_item}
+     *      </button>,
+     *      () => ', '
      *   )}
-     * </div>
+     * </div>)
      * ```
      */
     function $Repeat(ob, render, separator) {
@@ -2537,7 +2686,7 @@
      * > **Note** : while functional, RepeatScroll is not perfect. A "VirtualScroll" behaviour is in the
      * > roadmap to only maintain the right amount of elements on screen.
      *
-     * @category verb, toc
+     * @category dom, toc
      */
     function $RepeatScroll(ob, render, options = {}) {
         // we cheat the typesystem, which is not great, but we know what we're doing.
@@ -2902,7 +3051,12 @@
             for (var i = 0, l = keys.length; i < l; i++) {
                 var key = keys[i];
                 if (key === 'class') {
-                    node_observe_class(node, attrs.class);
+                    var clss = attrs.class;
+                    if (Array.isArray(clss))
+                        for (var j = 0, lj = clss.length; j < lj; j++)
+                            node_observe_class(node, clss[j]);
+                    else
+                        node_observe_class(node, attrs.class);
                 }
                 else if (key === 'style') {
                     node_observe_style(node, attrs.style);
@@ -3293,6 +3447,7 @@
                 super();
                 this.app = app;
                 this.views = {};
+                this.persist = false;
                 /** @internal */
                 this.registry = this.app.registry;
                 /** @internal */
@@ -3465,8 +3620,7 @@
                 // case we give it the app as it *should* be a block (we do not allow
                 // constructors with parameters for data services)
                 var result = new key(this.app);
-                if (result instanceof Block)
-                    this.init_list.add(result);
+                this.init_list.add(result);
                 if (result.persist)
                     this.persistents.add(result);
                 return result;
@@ -3557,6 +3711,7 @@
     exports.insert_before_and_init = insert_before_and_init;
     exports.node_add_event_listener = node_add_event_listener;
     exports.node_add_mixin = node_add_mixin;
+    exports.node_add_observer = node_add_observer;
     exports.node_do_init = node_do_init;
     exports.node_do_inserted = node_do_inserted;
     exports.node_do_remove = node_do_remove;
@@ -3573,7 +3728,7 @@
     exports.node_remove_mixin = node_remove_mixin;
     exports.node_unobserve = node_unobserve;
     exports.o = o;
-    exports.remove_and_deinit = remove_and_deinit;
+    exports.remove_node = remove_node;
     exports.setup_mutation_observer = setup_mutation_observer;
     exports.sym_init = sym_init;
     exports.sym_inserted = sym_inserted;

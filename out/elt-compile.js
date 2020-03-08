@@ -106,17 +106,19 @@ const examples = Array.from(document.getElementsByTagName('pre'))
     .filter(n => n.classList.contains('language-tsx'))
 
 for (let e of examples) {
-  var btn = document.createElement('button')
-  btn.innerText = 'Run Example'
-  e.parentNode.insertBefore(btn, e.nextSibling)
-
-  btn.addEventListener('click', ev => {
-    sandbox.setText(e.innerText)
-
-    reload()
-    wd.style.display = 'flex'
-  })
-
+  var next = e.nextSibling
+  var div = h('div',
+    {class: 'st-example'},
+    e,
+    h('button', '▶ Run Example', btn => {
+      btn.addEventListener('click', ev => {
+        sandbox.setText(e.innerText)
+        reload()
+        wd.style.display = 'flex'
+      })
+    })
+  )
+  next.parentNode.insertBefore(div, next)
   // For runnable code, do something
 }
 
