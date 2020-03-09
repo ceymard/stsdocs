@@ -114,7 +114,7 @@ export class Documentable {
     return this._docs.replace(/\[\[(.+?)\]\]/g, (m, name) => {
       // var first = this.declarations[0]
       var dc = Documentable.name_map.get(name)
-      console.log(name, dc?.kind)
+      // console.log(name, dc?.kind)
       return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
     })
   }
@@ -158,7 +158,8 @@ export class Documentable {
           return `file not found: "${try_path}"`
         }
       })
-      .replace(/(?:\s*\*\s*)?@([\w_.]+)[^\n]*\n*/gm, (m, tag) => (tags.add(tag), ''))
+      .replace(/^(?:\s*\*\s*)?\s*@([\w_]+)\s*\n+/gm, (m, tag) => (tags.add(tag), ''))
+      .replace(/\*\/\s*$/, '')
 
     this._docs = clean.trim()
     this.tags = tags
@@ -211,7 +212,14 @@ export class Documentable {
   }
 
   get display_name() {
-    return this.name.replace(/^.*#/, '')
+    var first = this.declarations[0].compilerNode
+    var opt = ''
+    if (ts.ts.isMethodSignature(first) || ts.ts.isPropertySignature(first) ) {
+      if (first.questionToken)
+        opt = '?'
+    }
+
+    return this.name.replace(/^.*#/, '') + opt
   }
 
   get members() {

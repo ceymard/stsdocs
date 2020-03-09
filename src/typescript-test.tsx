@@ -52,7 +52,7 @@ function coalesce_namespaces(doc: Documentable, res: Documentable[] = []) {
 }
 
 function Declaration({doc}: {doc: Documentable}) {
-  return <div class={css.block} id={doc.name} data-categories={[...doc.categories].join(',')}>
+  return <div class={css.block} id={doc.name} data-categories={[...doc.categories].join(',')} data-tags={[...doc.tags].join(',')}>
     {doc.withClass((name, cls) => <Class name={name} cls={cls} />)}
     {doc.withInterface((name, cls) => <Interface name={name} cls={cls} />)}
     {doc.withFunctions((name, fns) => {
@@ -63,7 +63,7 @@ function Declaration({doc}: {doc: Documentable}) {
     <div class={css.doc}>{doc.docs ? raw(md.render(doc.docs)) : '¯\\_(ツ)_/¯'}</div>
 
     {doc.withMembers(members => <div class='st-nest'>
-      {members.map(m => {
+      {members.filter(m => !m.tags.has('internal')).map(m => {
         // console.log(doc.name + '.' + m.name, m.declarations.length)
         return <Declaration doc={m}/>
       })}
@@ -107,7 +107,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
         {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8').replace(/\[\[(.+?)\]\]/g, (m, name) => {
       // var first = this.declarations[0]
       var dc = Documentable.name_map.get(name)
-      console.log(name, dc?.kind)
+      // console.log(name, dc?.kind)
       return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
     })))}
         <h1>API Documentation</h1>

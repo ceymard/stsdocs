@@ -1,5 +1,4 @@
 function scrollToHash(id) {
-  console.log(id)
   var elt = document.getElementById(id)
   if (elt) {
     elt.scrollIntoView()
@@ -66,7 +65,7 @@ const p = e.$DIV()
       theme: 'sandbox-dark',
       acquireTypes: false,
       compilerOptions: {
-        target: 1,
+        target: 5,
         strict: true,
         lib: ["es6", "dom"],
         jsx: 2,
@@ -95,7 +94,7 @@ declare global {
 
     // sdb.updateCompilerSetting('')
     sdb.updateCompilerSetting('jsxFactory', 'E')
-    sdb.updateCompilerSetting('target', 1)
+    sdb.updateCompilerSetting('target', 5)
     sdb.updateCompilerSetting('module', 1)
     sdb.monaco.editor.setTheme('sandbox-dark')
 
@@ -171,7 +170,7 @@ function h(elt, ...children) {
 
 function reload() {
   sandbox.getRunnableJS().then(code => {
-    // console.log(code)
+    console.log(code.split(/\n/g).map((l, i) => `${i + 1}: ${l}`).join('\n'))
     mkiframe(code)
   })
 }
