@@ -83,9 +83,10 @@ export function hasModifiers(v: any): v is IHasModifiers {
 
 export class Documentable {
 
-  static name_map = new Map<ts.Node, string>()
+  static name_map = new Map<string, Documentable>()
+  static node_map = new Map<ts.Node, Documentable>()
 
-  docs = ''
+  _docs = ''
   modifiers = new Set<string>() // const, static, public, async, protected ... only valid for methods and properties
   categories = new Set<string>()
   tags = new Set<string>()
@@ -94,9 +95,12 @@ export class Documentable {
     public name: string,
     public declarations: DocumentableTypes[] = []
   ) {
-    for (var d of declarations)
-      Documentable.name_map.set(d, name)
+    for (var d of declarations) {
+      Documentable.node_map.set(d, this)
+    }
     this.parse()
+    if (this.kind !== 'namespace')
+      Documentable.name_map.set(name, this)
   }
 
   is<Types extends any[]>(...types: Types): boolean {
@@ -104,6 +108,15 @@ export class Documentable {
     for (var t of types)
       if (first instanceof t) return true
     return false
+  }
+
+  get docs(): string {
+    return this._docs.replace(/\[\[(.+?)\]\]/g, (m, name) => {
+      // var first = this.declarations[0]
+      var dc = Documentable.name_map.get(name)
+      console.log(name, dc?.kind)
+      return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
+    })
   }
 
   parse() {
@@ -145,10 +158,9 @@ export class Documentable {
           return `file not found: "${try_path}"`
         }
       })
-      .replace(/^\s*@[\w+][^\n]*\n*/g, '')
-      .replace(/`#([\w._]+)`/g, (m, sym) => `[\`${sym}\`](#${sym})`)
+      .replace(/(?:\s*\*\s*)?@([\w_.]+)[^\n]*\n*/gm, (m, tag) => (tags.add(tag), ''))
 
-    this.docs = clean.trim()
+    this._docs = clean.trim()
     this.tags = tags
     this.categories = categories
     return clean
@@ -198,6 +210,10 @@ export class Documentable {
 
   }
 
+  get display_name() {
+    return this.name.replace(/^.*#/, '')
+  }
+
   get members() {
     var me = this.class ?? this.interface
     if (!me) return []
@@ -211,7 +227,7 @@ export class Documentable {
       else if (m instanceof ts.CallSignatureDeclaration)
         members_with_names.push(['0-(', '', m])
       else if (m instanceof ts.ConstructorDeclaration || m instanceof ts.ConstructSignatureDeclaration)
-        members_with_names.push(['0-constructor', 'constructor', m])
+        members_with_names.push(['0-constructor', `${this.name}#constructor`, m])
       else if (m instanceof ts.MethodDeclaration || m instanceof ts.PropertyDeclaration || m instanceof ts.GetAccessorDeclaration || m instanceof ts.SetAccessorDeclaration) {
         const mods = m.getModifiers().map(m => m.getText().trim())
         const nb = [
@@ -223,7 +239,7 @@ export class Documentable {
 
         var is_static = mods.includes('static')
         var sortkey = is_static ? `9${nb}-${m.getName()}` : `${nb}-${m.getName()}`
-        var name = is_static ? `${this.name}.${m.getName()}` : m.getName()
+        var name = is_static ? `${this.name}.${m.getName()}` : `${this.name}#${m.getName()}`
         if (m instanceof ts.MethodDeclaration) {
           var overloads = m.getOverloads()
           if (overloads.length) {
@@ -236,7 +252,7 @@ export class Documentable {
           members_with_names.push([sortkey, name, m])
         }
       } else {
-        members_with_names.push(['3-' + m.getName(), `${m.getName()}`, m])
+        members_with_names.push(['3-' + m.getName(), `${this.name}#${m.getName()}`, m])
       }
     }
 
@@ -354,27 +370,27 @@ export class Documentable {
 
   withFunctions<T>(fn: (name: string, t: FunctionTypes[]) => T): T | null {
     var f = this.functions
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withClass<T>(fn: (name: string, t: ts.ClassDeclaration) => T): T | null {
     var f = this.class
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withInterface<T>(fn: (name: string, t: ts.InterfaceDeclaration) => T): T | null {
     var f = this.interface
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withTypealias<T>(fn: (name: string, t: ts.TypeAliasDeclaration) => T): T | null {
     var f = this.type
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withNamespace<T>(fn: (name: string, t: ts.NamespaceDeclaration) => T): T | null {
     var f = this.namespace
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withSourceFile<T>(fn: (t: ts.SourceFile) => T): T | null {
@@ -384,12 +400,12 @@ export class Documentable {
 
   withVariable<T>(fn: (name: string, t: VariableTypes) => T): T | null {
     var f = this.variable
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withEnum<T>(fn: (name: string, t: ts.EnumDeclaration) => T): T | null {
     var f = this.enum
-    return f ? fn(this.name, f) : null
+    return f ? fn(this.display_name, f) : null
   }
 
   withMembers<T>(fn: (members: Documentable[]) => T): T | null {

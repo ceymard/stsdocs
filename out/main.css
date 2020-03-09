@@ -59,6 +59,11 @@ code {
   border-radius: 2px;
 }
 
+a > code {
+  color: rgba(var(--st-class), 1);
+  text-decoration: underline;
+}
+
 .st-doc p > code, .st-doc li > code {
   white-space: pre;
   background: rgba(var(--st-primary), 0.07);

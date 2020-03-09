@@ -62,7 +62,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
         // FIXME
         // @ts-ignore
         var ta = type.getTypeArguments().filter(t => !t.compilerType.isThisType)
-        return <span><a href={'#' + (Documentable.name_map.get(first) ?? first.getName())}>{first.getName()}</a>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
+        return <span><a href={'#' + (Documentable.node_map.get(first)?.name ?? first.getName())}>{first.getName()}</a>{ta.length ? <>&lt;{Repeat(ta, a => T(a), ', ')}&gt;</> : ''}</span>
       }
 
       // FIXME
@@ -92,7 +92,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       // THIS IS WHERE WE CREATE A LINK !
       var resolved = type.getType().getSymbol()?.getDeclarations()[0] ?? type.getType().getSymbol()?.getValueDeclaration()
       var typename = type.getTypeName().getText()
-      return <a href={`#${Documentable.name_map.get(resolved!) ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments().filter(t => !ts.Node.isThisTypeNode(t))}/></a>
+      return <a href={`#${Documentable.node_map.get(resolved!)?.name ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments().filter(t => !ts.Node.isThisTypeNode(t))}/></a>
       // console.log(type.getType())
     } else if (ts.Node.isFunctionTypeNode(type)) {
       return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>

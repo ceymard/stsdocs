@@ -95,7 +95,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
       <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
         <div class='st-toc flex-absolute-grow'>
-          {Array.from(by_categories.entries()).filter(c => c[0] !== 'toc').map(([category, declarations]) => <div>
+          {Array.from(by_categories.entries()).filter(c => c[0] && c[0] !== 'toc').map(([category, declarations]) => <div>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
             {declarations.filter(d => d.categories.has('toc')).map(e =>
               <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}{e.kind === 'function' || e.kind === 'method' ? '()' : ''}</b></a></div>
@@ -104,9 +104,14 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
         </div>
       </div>
       <div class='st-docmain'>
-        {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')))}
+        {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8').replace(/\[\[(.+?)\]\]/g, (m, name) => {
+      // var first = this.declarations[0]
+      var dc = Documentable.name_map.get(name)
+      console.log(name, dc?.kind)
+      return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
+    })))}
         <h1>API Documentation</h1>
-        {all_declarations.filter(d => !d.categories.has('internal')).map(decl => <Declaration doc={decl}/>)}
+        {all_declarations.filter(d => !d.tags.has('internal')).map(decl => <Declaration doc={decl}/>)}
       </div>
     </div>
 

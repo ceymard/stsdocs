@@ -1,3 +1,22 @@
+function scrollToHash(id) {
+  console.log(id)
+  var elt = document.getElementById(id)
+  if (elt) {
+    elt.scrollIntoView()
+  }
+}
+
+window.addEventListener('hashchange', function (ev) {
+  var top = window.location.hash.slice(1)
+  scrollToHash(top)
+  ev.preventDefault()
+})
+
+window.addEventListener('load', function () {
+  if (window.location.hash)
+    scrollToHash(window.location.hash.slice(1))
+})
+
 
 // First set up the VSCode loader in a script tag
 const getLoaderScript = document.createElement('script')
