@@ -43,10 +43,11 @@ getLoaderScript.onload = () => {
   })
 
   // Grab a copy of monaco, TypeScript and the sandbox
-  require(['vs/editor/editor.main', 'vs/language/typescript/tsWorker', 'sandbox/index'], (
+  require(['vs/editor/editor.main', 'vs/language/typescript/tsWorker', 'sandbox/index', 'sandbox/theme'], (
     main,
     _tsWorker,
-    sandbox
+    sandbox,
+    theme
   ) => {
     const initialCode = `import { e } from "elt"
 const p = e.$DIV()
@@ -98,7 +99,17 @@ declare global {
     sdb.updateCompilerSetting('jsxFactory', 'E')
     sdb.updateCompilerSetting('target', 5)
     sdb.updateCompilerSetting('module', 1)
-    // sdb.monaco.editor.setTheme('sandbox-dark')
+
+    sdb.monaco.editor.defineTheme('eltdoc', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'elt-function-call', foreground: '8080dd'},
+        { token: 'metatag.content', foreground: 'ddaaaa', fontStyle: 'italic' },
+        { token: 'attribute.name', foreground: 'dd8080' }
+      ]
+    })
+    sdb.monaco.editor.setTheme('eltdoc')
 
     // console.log(sdb)
   })

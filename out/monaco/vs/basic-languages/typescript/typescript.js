@@ -56,20 +56,22 @@ define("vs/basic-languages/typescript/typescript",["require","exports"],(functio
 		],
 
 		common: [
-			// identifiers and keywords
-			[/[A-Za-z_$][\w$]*/, {
-				cases: {
-					'@typeKeywords': 'keyword',
-					'@keywords': 'keyword',
-					'@default': 'identifier'
-				}
-			}],
+      // Added for ELT
+      [/(\$[\w.$]+)(\()/, ['elt-function-call', 'delimiter.parenthesis']],
+      // identifiers and keywords
+			[/([A-Za-z_$][\w$]*)(\()?/, {
+        cases: {
+          '@typeKeywords': 'keyword',
+          '@keywords': 'keyword',
+          '@default': 'identifier'
+        }
+      }],
 			// [/[A-Z][\w\$]*/, 'type.identifier'],  // to show class names nicely
 			// [/[A-Z][\w\$]*/, 'identifier'],
 
 			// whitespace
       { include: '@whitespace' },
-      [/(?=<[A-Za-z_$][\w.$]*[^>]+>)/, { token: 'tag', next: '@tsxStartTag'}],
+      [/(?=<[A-Za-z_$][\w.$]*[^>]*>)/, { token: 'metatag', next: '@tsxStartTag'}],
 
 			// regular expression: ensure it is terminated before beginning (otherwise it is an opeator)
 			[/\/(?=([^\\\/]|\\.)+\/([gimsuy]*)(\s*)(\.|;|,|\)|\]|\}|$))/, { token: 'regexp', bracket: '@open', next: '@regexp' }],
@@ -173,27 +175,27 @@ define("vs/basic-languages/typescript/typescript",["require","exports"],(functio
     ],
 
     tsxStartTag: [
-      [/</, 'tag'],
+      [/</, 'metatag'],
       [/([\w.$]+)(=?)/, {
         cases: {
-          '$2': ['metatag', 'tag'],
-          '@default': 'tag'
+          '$2': ['attribute.name', 'metatag'],
+          '@default': 'metatag'
         }
       }],
       [/\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
 			[/"/, 'string', '@string_double'],
 			[/'/, 'string', '@string_single'],
 
-      [/>/, { token: 'tag', switchTo: '@tsx' }]
+      [/>/, { token: 'metatag', switchTo: '@tsx' }]
     ],
 
     tsx: [
-      [/<[A-Za-z_$][\w.$]*[^>]+/, '@rematch', '@tsxStartTag'],
+      [/<[A-Za-z_$][\w.$]*[^>]*/, '@rematch', '@tsxStartTag'],
       // end of tag
-      [/<\/[A-Za-z_$][\w.$]*>/, 'tag', '@pop'],
+      [/<\/[A-Za-z_$][\w.$]*>/, 'metatag', '@pop'],
       // escape
       [/\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
-      [/[\{<]+/, 'metatag.content']
+      [/[^\{<]+/, 'metatag.content']
       // {include: tsxInside }
     ]
 	}
