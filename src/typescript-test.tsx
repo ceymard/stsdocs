@@ -10,16 +10,20 @@ import { Class, Interface, FnProto, VarDecl, TypeAlias } from './widgets'
 import * as m from 'markdown-it'
 // import * as h from 'highlight.js'
 import * as prism from 'prismjs'
-require('prismjs/components/')(['javascript', 'typescript', 'jsx', 'tsx'])
+require('prismjs/components/')(['javascript', 'typescript', 'jsx', 'tsx', 'bash', 'json'])
 
 
 var md = m({
   highlight: (str, lang) => {
     try {
-      var res = prism.highlight(str, prism.languages.jsx, 'tsx')
-      return `<pre class='language-tsx'><code>${res}</code></pre>`
+      // console.log(str, lang)
+      var res = prism.highlight(str, prism.languages[lang], lang)
+      return `<pre class='language-${lang}'><code>${res}</code></pre>`
       // return h.highlight(lang, str).value;
-    } catch (__) {}
+    } catch (__) {
+      console.error(prism.languages[lang], lang)
+      console.error(Object.keys(prism.languages))
+    }
 
     return ''; // use external default escaping
   }

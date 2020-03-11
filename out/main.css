@@ -9,7 +9,7 @@ html, body {
 }
 
 b {
-  font-weight: 400;
+  font-weight: 500;
 }
 
 h1 {
@@ -294,8 +294,12 @@ pre {
   color: rgba(var(--st-primary), 0.7)
 }
 
-h1, h2, h3, h4, h5, h6, p, .st-example {
+h1, h2, h3, h4, h5, h6, p {
   margin: 1em 0;
+}
+
+.st-example {
+  margin: 2em 0;
 }
 
 

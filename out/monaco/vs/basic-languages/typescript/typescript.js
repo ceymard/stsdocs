@@ -56,8 +56,9 @@ define("vs/basic-languages/typescript/typescript",["require","exports"],(functio
 		],
 
 		common: [
-      // Added for ELT
-      [/(\$[\w.$]+)(\()/, ['elt-function-call', 'delimiter.parenthesis']],
+			// Added for ELT doc exclusively
+			[/\b[Ee]\.\$[A-Z]+/, 'metatag'],
+			[/(\$[\w.$]+)(\()/, ['elt-function-call', 'delimiter.parenthesis']],
       // identifiers and keywords
 			[/([A-Za-z_$][\w$]*)(\()?/, {
         cases: {
