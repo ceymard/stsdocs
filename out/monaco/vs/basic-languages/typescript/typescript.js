@@ -69,7 +69,7 @@ define("vs/basic-languages/typescript/typescript",["require","exports"],(functio
 
 			// whitespace
       { include: '@whitespace' },
-      [/(?=<[A-Za-z_$][\w.$]*[^>]+>)/, { token: 'tag', next: '@tsx'}],
+      [/(?=<[A-Za-z_$][\w.$]*[^>]+>)/, { token: 'tag', next: '@tsxStartTag'}],
 
 			// regular expression: ensure it is terminated before beginning (otherwise it is an opeator)
 			[/\/(?=([^\\\/]|\\.)+\/([gimsuy]*)(\s*)(\.|;|,|\)|\]|\}|$))/, { token: 'regexp', bracket: '@open', next: '@regexp' }],
@@ -172,22 +172,28 @@ define("vs/basic-languages/typescript/typescript",["require","exports"],(functio
 			{ include: 'common' }
     ],
 
-    tsxInsideTag: [
+    tsxStartTag: [
       [/</, 'tag'],
-      [/[\w.$]+=?/, 'tag'],
+      [/([\w.$]+)(=?)/, {
+        cases: {
+          '$2': ['metatag', 'tag'],
+          '@default': 'tag'
+        }
+      }],
       [/\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
 			[/"/, 'string', '@string_double'],
 			[/'/, 'string', '@string_single'],
 
-      [/>/, {token: 'tag', switchTo: '@tsx'}]
+      [/>/, { token: 'tag', switchTo: '@tsx' }]
     ],
 
     tsx: [
-      [/<[A-Za-z_$][\w.$]*[^>]+/, { token: '@rematch', switchTo: '@tsxInsideTag' }],
+      [/<[A-Za-z_$][\w.$]*[^>]+/, '@rematch', '@tsxStartTag'],
       // end of tag
       [/<\/[A-Za-z_$][\w.$]*>/, 'tag', '@pop'],
       // escape
-      [/\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }]
+      [/\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
+      [/[\{<]+/, 'metatag.content']
       // {include: tsxInside }
     ]
 	}

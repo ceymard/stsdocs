@@ -64,7 +64,7 @@ const p = e.$DIV()
     // Create a sandbox and embed it into the the div #monaco-editor-embed
     const sandboxConfig = {
       text: initialCode,
-      theme: 'sandbox-dark',
+      // theme: 'sandbox-dark',
       acquireTypes: false,
       compilerOptions: {
         target: 5,
@@ -98,7 +98,7 @@ declare global {
     sdb.updateCompilerSetting('jsxFactory', 'E')
     sdb.updateCompilerSetting('target', 5)
     sdb.updateCompilerSetting('module', 1)
-    sdb.monaco.editor.setTheme('sandbox-dark')
+    // sdb.monaco.editor.setTheme('sandbox-dark')
 
     // console.log(sdb)
   })
