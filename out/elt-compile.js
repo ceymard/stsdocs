@@ -21,6 +21,7 @@ window.addEventListener('load', function () {
 const getLoaderScript = document.createElement('script')
 // getLoaderScript.src = 'https://www.typescriptlang.org/v2/js/vs.loader.js'
 getLoaderScript.src = './loader.js'
+getLoaderScript.src = './monaco/vs/loader.js'
 getLoaderScript.async = true
 getLoaderScript.onload = () => {
   // Now the loader is ready, tell require where it can get the version of monaco, and the sandbox
@@ -32,7 +33,8 @@ getLoaderScript.onload = () => {
   //
   require.config({
     paths: {
-      vs: 'https://typescript.azureedge.net/cdn/3.7.3/monaco/min/vs',
+      // vs: 'https://typescript.azureedge.net/cdn/3.7.3/monaco/min/vs',
+      vs: './monaco/vs',
       // sandbox: 'https://www.typescriptlang.org/v2/js/sandbox',
       sandbox: './sandbox',
     },
@@ -118,7 +120,7 @@ wd.addEventListener('keydown', ev => {
     reload()
   }
 }, true)
-wd.style.display = 'none'
+// wd.style.display = 'none'
 
 const examples = Array.from(document.getElementsByTagName('pre'))
     .filter(n => n.classList.contains('language-tsx'))
@@ -133,6 +135,7 @@ for (let e of examples) {
         sandbox.setText(e.innerText)
         reload()
         wd.style.display = 'flex'
+        sandbox.editor.layout() // force repaint of monaco window
       })
     })
   )

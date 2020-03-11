@@ -110,13 +110,18 @@ export class Documentable {
     return false
   }
 
-  get docs(): string {
-    return this._docs.replace(/\[\[(.+?)\]\]/g, (m, name) => {
+  static doclinks(doc: string) {
+    return doc.replace(/\[\[(.+?)\]\]/g, (m, name) => {
       // var first = this.declarations[0]
       var dc = Documentable.name_map.get(name)
       // console.log(name, dc?.kind)
       return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
+      // return `<a href='#${name}'><code>${name}${dc?.kind === 'function' ? '()' : ''}</code></a>`
     })
+  }
+
+  get docs(): string {
+    return Documentable.doclinks(this._docs)
   }
 
   parse() {

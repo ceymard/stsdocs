@@ -8,7 +8,7 @@
      * Does a naive foreach on an IndexableArray
      * @param _arr the array
      * @param fn the function to apply
-     * @category internal
+     * @internal
      */
     function EACH(_arr, fn) {
         for (var i = 0, arr = _arr.arr; i < arr.length; i++) {
@@ -21,7 +21,7 @@
     }
     /**
      * An array wrapper that infects its elements with their indexes for faster deletion.
-     * @category internal
+     * @internal
      */
     class IndexableArray {
         constructor() {
@@ -214,7 +214,7 @@
             }
         }
         o_1.Observer = Observer;
-        /** @category internal */
+        /** @internal */
         function each_recursive(obs, fn) {
             var objs = [];
             var stack = [];
@@ -246,7 +246,7 @@
             }
         }
         o_1.each_recursive = each_recursive;
-        /** @category internal */
+        /** @internal */
         class Queue extends IndexableArray {
             constructor() {
                 super(...arguments);
@@ -277,7 +277,7 @@
                     var obs = arr[i];
                     if (obs == null)
                         continue;
-                    if (obs instanceof VirtualObservable) {
+                    if (obs instanceof CombinedObservable) {
                         obs.__value = obs.getter(obs.__parents_values);
                     }
                     EACH(obs.__children, ch => {
@@ -294,7 +294,7 @@
             }
         }
         o_1.Queue = Queue;
-        /** @category internal */
+        /** @internal */
         const queue = new Queue();
         /**
          * Start an observable transaction, where the observers of all the observables being
@@ -344,18 +344,18 @@
          */
         class Observable {
             /**
-             * Build an observable from a value. For readability purposes, use the [`o()`](#o) function instead.
+             * Build an observable from a value. For readability purposes, use the [[o]] function instead.
              */
             constructor(__value) {
                 this.__value = __value;
-                /** @category internal */
+                /** @internal */
                 this.__observers = new IndexableArray();
-                /** @category internal */
+                /** @internal */
                 this.__children = new IndexableArray();
-                /** @category internal */
+                /** @internal */
                 this.__watched = false;
                 /** The index of this Observable in the notify queue. If null, means that it's not scheduled.
-                 * @category internal
+                 * @internal
                 */
                 this.idx = null;
                 // (this as any).debug = new Error
@@ -408,7 +408,7 @@
              * Create an observer bound to this observable, but do not start it.
              * For it to start observing, one needs to call its `startObserving()` method.
              *
-             * > **Note**: This method should rarely be used. Prefer using [`$observe()`](#$observe), [`node_observe()`](#node_observe) or [`Mixin.observe`](#Mixin) for observing values.
+             * > **Note**: This method should rarely be used. Prefer using [[$observe]], [[node_observe]], [`Mixin#observe`](#o.ObserverHolder#observe) or [`App.Service#observe`](#o.ObserverHolder#observe) for observing values.
              */
             createObserver(fn) {
                 return new Observer(fn, this);
@@ -426,7 +426,7 @@
             }
             /**
              * Add a child observable to this observable that will depend on it to build its own value.
-             * @category internal
+             * @internal
              */
             addChild(ch) {
                 if (ch.idx != null)
@@ -437,7 +437,7 @@
                 this.checkWatch();
             }
             /**
-             * @category internal
+             * @internal
              */
             removeChild(ch) {
                 if (ch.idx == null)
@@ -461,7 +461,7 @@
              * Check if this `Observable` is being watched or not. If it stopped being observed but is in the notification
              * queue, remove it from there as no one is expecting its value.
              *
-             * @category internal
+             * @internal
              */
             checkWatch() {
                 if (this.__watched && this.__observers.real_size === 0 && this.__children.real_size === 0) {
@@ -476,11 +476,11 @@
                 }
             }
             /**
-             * @category internal
+             * @internal
              */
             unwatched() { }
             /**
-             * @category internal
+             * @internal
              */
             watched() { }
             tf(fnget) {
@@ -530,14 +530,14 @@
          * An observable that does not its own value, but that depends
          * from outside getters and setters. The `#o.virtual` helper makes creating them easier.
          *
-         * @category observable, internal
+         * @internal
          */
-        class VirtualObservable extends Observable {
+        class CombinedObservable extends Observable {
             constructor(deps) {
                 super(o_1.NOVALUE);
-                /** @category internal */
+                /** @internal */
                 this.__links = [];
-                /** @category internal */
+                /** @internal */
                 this.__parents_values = [];
                 this.dependsOn(deps);
             }
@@ -622,9 +622,9 @@
                 return this;
             }
         }
-        o_1.VirtualObservable = VirtualObservable;
+        o_1.CombinedObservable = CombinedObservable;
         function combine(deps, get, set) {
-            var virt = new VirtualObservable(deps);
+            var virt = new CombinedObservable(deps);
             virt.getter = get;
             virt.setter = set; // force undefined to trigger errors for readonly observables.
             return virt;
@@ -653,6 +653,11 @@
             });
         }
         o_1.prop = prop;
+        /**
+         * Get a MaybeObservable's value
+         * @returns `arg.get()` if it was an Observable or `arg` itself if it was not.
+         * @category observable, toc
+         */
         function get(arg) {
             return arg instanceof Observable ? arg.get() : arg;
         }
@@ -722,7 +727,7 @@
         }
         o_1.or = or;
         function join(...deps) {
-            return new VirtualObservable(deps);
+            return new CombinedObservable(deps);
         }
         o_1.join = join;
         function assign(value, mutator) {
@@ -903,11 +908,11 @@
         }
         o_1.clone = clone;
         /**
-         * Returns a function that accepts a callback. While this callback is running, all calls
-         * to the returned locks will not launch.
+         * Returns a function that accepts a callback. While this callback is running, all subsequent
+         * calls to the created lock become no-op.
          *
          * This helper is to be used when have observables which set each other's value in observers,
-         * which could end up in an infinite loop.
+         * which could end up in an infinite loop, or when dealing with DOM Events.
          *
          * @returns a function that accepts a callback
          * @category observable, toc
@@ -924,28 +929,42 @@
         }
         o_1.exclusive_lock = exclusive_lock;
         /**
-         * A group of observers that can be started and stopped at the same time.
-         * This class is meant to be used for components such as Mixin that want
-         * to tie observing to their life cycle.
+         * A helper class that manages a group of observers with a few handy methods
+         * to all start or stop them from observing.
+         *
+         * Meant to be extended by [[Mixin]] and [[App.Service]], or any class that has
+         * some form of life-cycle (on/off) that it wants to tie observing to.
+         *
          * @category observable, toc
          */
         class ObserverHolder {
             constructor() {
-                this.observers = [];
-                this.live = false;
-            }
-            startObservers() {
-                for (var ob of this.observers)
-                    ob.startObserving();
-                this.live = true;
-            }
-            stopObservers() {
-                for (var ob of this.observers)
-                    ob.stopObserving();
-                this.live = false;
+                /** @internal */
+                this.__observers = [];
+                /**
+                 * Boolean indicating if this object is actively observing its observers.
+                 */
+                this.is_observing = false;
             }
             /**
-             * Observe and Observable and return the observer that was created
+             * Start all the observers on this holder
+             * @internal
+             */
+            startObservers() {
+                for (var ob of this.__observers)
+                    ob.startObserving();
+                this.is_observing = true;
+            }
+            /**
+             * Stop all the observers on this holder from observing.
+             */
+            stopObservers() {
+                for (var ob of this.__observers)
+                    ob.stopObserving();
+                this.is_observing = false;
+            }
+            /**
+             * Does pretty much what [[$observe]] does.
              */
             observe(obs, fn, observer_callback) {
                 var _a;
@@ -958,23 +977,23 @@
                 return this.addObserver(observer);
             }
             /**
-             * Add an observer to the observers array
+             * Add an observer to the observers array.
              */
             addObserver(observer) {
-                this.observers.push(observer);
-                if (this.live)
+                this.__observers.push(observer);
+                if (this.is_observing)
                     observer.startObserving();
                 return observer;
             }
             /**
-             * Remove the observer from this group
+             * Remove the observer from this holder and stop it from observing
              */
             unobserve(observer) {
-                const idx = this.observers.indexOf(observer);
+                const idx = this.__observers.indexOf(observer);
                 if (idx > -1) {
-                    if (this.live)
+                    if (this.is_observing)
                         observer.stopObserving();
-                    this.observers.splice(idx, 1);
+                    this.__observers.splice(idx, 1);
                 }
             }
         }
@@ -1297,7 +1316,6 @@
     const NODE_IS_INSERTED = 0x10;
     const NODE_IS_OBSERVING = 0x100;
     function _node_call_cbks(node, sym, parent) {
-        var _a, _b, _c, _d, _e, _f;
         var cbks = node[sym];
         parent = (parent !== null && parent !== void 0 ? parent : node.parentNode);
         if (cbks) {
@@ -1309,17 +1327,17 @@
         if (mx) {
             if (sym === sym_init) {
                 for (i = 0, l = mx.length; i < l; i++) {
-                    (_b = (_a = mx[i]).init) === null || _b === void 0 ? void 0 : _b.call(_a, node, parent);
+                    mx[i].init(node, parent);
                 }
             }
             else if (sym === sym_inserted) {
                 for (i = 0, l = mx.length; i < l; i++) {
-                    (_d = (_c = mx[i]).inserted) === null || _d === void 0 ? void 0 : _d.call(_c, node, parent);
+                    mx[i].inserted(node, parent);
                 }
             }
             else if (sym === sym_removed) {
                 for (i = 0, l = mx.length; i < l; i++) {
-                    (_f = (_e = mx[i]).removed) === null || _f === void 0 ? void 0 : _f.call(_e, node, parent);
+                    mx[i].removed(node, parent);
                 }
             }
         }
@@ -1380,7 +1398,7 @@
     }
     /**
      * Call init() functions on a node, and start its observers.
-     * @category internal
+     * @internal
      */
     function node_do_init(node) {
         // if there is anything in the status, it means the node was inited before,
@@ -1407,7 +1425,7 @@
         node[sym_mount_status] = NODE_IS_INITED | NODE_IS_INSERTED | NODE_IS_OBSERVING; // now inserted
     }
     /**
-     * @category internal
+     * @internal
      */
     function node_do_inserted(node) {
         if (node[sym_mount_status] & NODE_IS_INSERTED)
@@ -1459,7 +1477,7 @@
      *
      * If `prev_parent` is not supplied, then the `removed` is not run, but observers are stopped.
      *
-     * @category internal
+     * @internal
      */
     function node_do_remove(node, prev_parent) {
         const node_stack = [];
@@ -1486,7 +1504,7 @@
      * Remove a `node` from the tree and call `removed` on its mixins and all the `removed` callbacks..
      *
      * This function is mostly used by verbs that don't want to wait for the mutation observer
-     * callback registered in [`setup_mutation_observer`](#setup_mutation_observer)
+     * callback registered in [[setup_mutation_observer]]
      *
      * @category low level dom, toc
      */
@@ -1503,7 +1521,7 @@
     }
     /**
      * This is where we keep track of the registered documents.
-     * @category internal
+     * @internal
      */
     const _registered_documents = new WeakSet();
     /**
@@ -1636,7 +1654,7 @@
      * Observers are called whenever the observable changes **and** the node is contained
      * in the document.
      *
-     * Used mostly by [`$observe()`](#$observe) and `Mixin.observe`
+     * Used mostly by [[$observe]] and [[Mixin.observe]]
      *
      * @category low level dom, toc
      */
@@ -1795,7 +1813,7 @@
     }
     /**
      * Register a `callback` to be called for the life-cycle event `sym` on `node`.
-     * [`$init()`](#$init), [`$inserted()`](#inserted) and [`$removed()`](#$removed) are more commonly used, as well as the methods on [`Mixin`](#Mixin)
+     * [[$init]], [[$inserted]] and [[$removed]] are more commonly used, or alternatively [[Mixin#init]], [[Mixin#inserted]] or [[Mixin#removed]]
      *
      * This is mostly used internally.
      *
@@ -2035,6 +2053,8 @@
      *  - An object which keys are class names and values are `o.RO<any>` and whose truthiness
      *    determine the inclusion of the class on the target element.
      *
+     * The `class={}` attribute on all nodes works exactly the same as `$class`.
+     *
      * ```tsx
      * import { $class, o, $Fragment as $, $bind } from 'elt'
      *
@@ -2057,11 +2077,14 @@
      *     }
      *   `}
      *   </style>
+     *
      *   <input id='class3' type="checkbox">
      *     {$bind.boolean(o_bool)}
      *   </input> <label for='class3'>Class 3</label>
-     *   <input id='class2and4' type='checkbox'>
-     *
+     *   {' / '}
+     *   <input type='text'>
+     *     {$bind.string(o_cls)}
+     *   </input>
      *
      *   <div>
      *     {$class('class1', o_cls, {class3: o_bool})}
@@ -2172,8 +2195,44 @@
         };
     }
     /**
+     * Run code soon after the `node` was created, when it has a `parent`. Beware, the `parent` in
+     * init **is probably not the parent it will have in the document**.
+     *
+     * To avoid layout trashing (aka reflow) and needless repaints,
+     * ELT tries to do most of the work in `DocumentFragment` or while the nodes are still in memory.
+     *
+     * When calling [[e]] (or `E()`), whenever a node appends a child to itself, `e` calls its
+     * `$init` callbacks **and start the node's observers**. It does so because some verbs, like `$If`
+     * will only update their content when observing their condition, not before. Since `$If` uses enclosing
+     * comments to find out what it has to replace, it needs to have access to its parent to manipulate its
+     * siblings, hence this particular way of proceeding.
+     *
+     * Afterwards, [[$inserted]] and [[$removed]] both start and stop observers, respectively. The first
+     * time around, since [[$init]] already started them, [[$inserted]] will only run its callbacks and
+     * leave the observers to do their jobs.
+     *
      * ```jsx
-     *  <MyComponent>{$init(node => console.log(`This node was just created and its observers are now live`))}</MyComponent>
+     * import { o, $init, $inserted, $removed, $Fragment as $, $If, $click } from 'elt'
+     *
+     * var the_div = <div>
+     *   {$init(() => console.log('init'))}
+     *   {$inserted(() => console.log('inserted'))}
+     *   {$removed(() => console.log('removed'))}
+     *   I AM HERE.
+     * </div>
+     *
+     * var o_is_inside = o(false)
+     *
+     * // here, we reuse the_div and are not recreating it all the time.
+     * // notice in the console how init was only called once.
+     * document.body.appendChild(<$>
+     *   <button>
+     *     {$click(() => o_is_inside.mutate(b => !b))}
+     *     Toggle the div
+     *   </button>
+     *   {$If(o_is_inside, () => the_div)}
+     * </$>)
+     *
      * ```
      * @category dom, toc
      */
@@ -2184,13 +2243,9 @@
     }
     /**
      * Call the `fn` callback when the decorated `node` is inserted into the DOM with
-     * itself as first argument.
+     * itself as first argument and its parent as the second.
      *
-     * ```tsx
-     * append_child_and_mount(document.body, <div>{$inserted(n => {
-     *   console.log(`I am now in the DOM and `, n.parentNode, ` is document.body`)
-     * })}</div>)
-     * ```
+     * See [[$init]] for examples.
      *
      * @category dom, toc
      */
@@ -2200,18 +2255,11 @@
         };
     }
     /**
-     * Run a callback when the node is removed from its holding document.
+     * Run a callback when the node is removed from its holding document, with `node`
+     * as the node being removed and `parent` with its previous parent.
      *
-     * ```jsx
-     * import { o, $removed } from 'elt'
-     * const o_some_condition = o(true)
+     * See [[$init]] for examples.
      *
-     * document.appendChild($If(o_some_condition, () => <div>
-     *   {$removed((node, parent) => {
-     *     console.log(`I was removed.`)
-     *   })}
-     * </div>))
-     * ```
      * @category dom, toc
      */
     function $removed(fn) {
@@ -2248,11 +2296,13 @@
         };
     }
     (function ($scrollable) {
+        /** @internal */
         const documents_wm = new WeakMap();
+        /** @internal */
         $scrollable.sym_letscroll = Symbol('elt-scrollstop');
         /**
          * Used by the `scrollable()` decorator
-         * @category internal
+         * @internal
          */
         function setUpNoscroll(dc) {
             if (documents_wm.has(dc))
@@ -2271,28 +2321,46 @@
      * A `Mixin` is an object that is tied to a DOM Node and its lifecycle. This class
      * is the base class all Mixins should derive from.
      *
-     * Mixins can "comunicate" with each other by asking other mixins present on a given
-     * node.
+     * Aside from allowing code to be nicely boxed in classes, Mixins can "communicate" by
+     * looking for other mixins on the same node, children or parents.
      *
-     * Extending a Mixin allows the developper to be notified whenever the node
-     * is first created by the `d()` function, when it gets inserted into the DOM
-     * by overloading the `inserted()` method or when it gets removed from the DOM
-     * by overloading the `removed()` method.
+     * When defining a Mixin that could be set on a root type (eg: `HTMLElement`), ensure that
+     * it is always defined as an extension of this type
      *
-     * Additionally, it provides the `observe()` method that ties the observing of an
-     * Observable to the Node's presence in the DOM : if the `Node` is inserted, then
-     * the observers start listening to their observable. If it gets removed, they stop.
-     * Limiting the observing this way ensures that we avoid creating circular references
-     * and thus memory leaks.
+     * ```tsx
+     * import { Mixin } from 'elt'
      *
-     * If you intend to store a reference to the associated Node in your Mixin when called
-     * with `init()` or `inserted()`, please make sure that you set it to `null` in the
-     * `removed()` call.
+     * class MyMixinWorks<N extends HTMLElement> extends Mixin<N> {
+     *
+     * }
+     *
+     * class MyMixinFails extends Mixin<HTMLElement> {
+     *
+     * }
+     *
+     * var div = <div>
+     *   {new MyMixinWorks()}
+     *   {new MyMixinFails()}
+     * </div>
+     * ```
+     *
      * @category dom, toc
      */
     class Mixin extends o.ObserverHolder {
         constructor() {
             super(...arguments);
+            /**
+             * The node this mixin is associated to.
+             *
+             * Since assigning a mixin to a `Node` is done by **first** creating the mixin and
+             * putting it in its children when using [[e]], the fact that node is not typed as `N | null`
+             * is cheating ; `this.node` **is** null in the `constructor` of the Mixin.
+             *
+             * The only reason it is not `N | null` is because it is not `null` for very long.
+             *
+             * `this.node` is only defined for certain during [[Mixin#init]] ; do not try to use it before
+             * then.
+             */
             this.node = null;
         }
         /**
@@ -2334,9 +2402,20 @@
             };
         }
         /**
-         * Remove the mixin from this node. Observers created with `observe()` will
-         * stop observing, but `removed()` will not be called.
-         * @param node
+         * Stub method meant to be overloaded in a child class. Called during [[$init]]
+         */
+        init(node, parent) { }
+        /**
+         * Stub method meant to be overloaded in a child class. Called during [[$inserted]]
+         */
+        inserted(node, parent) { }
+        /**
+         * Stub method meant to be overloaded in a child class. Called during [[$removed]]
+         */
+        removed(node, parent) { }
+        /**
+         * Remove the mixin from this node. Observers created with `this.observe()` will
+         * stop observing. The `this.removed` method **will not** be called.
          */
         removeFromNode() {
             node_remove_mixin(this.node, this);
@@ -2389,8 +2468,10 @@
     }
     /**
      * Remove a Mixin from the array of mixins associated with this Node.
-     * @param node The node the mixin will be removed from
-     * @param mixin The mixin object we want to remove
+     *
+     * Stops the observers if they were running.
+     *
+     * Does **NOT** call its `removed()` handlers.
      */
     function node_remove_mixin(node, mixin) {
         var mx = node[sym_mixins];
@@ -2534,7 +2615,7 @@
     (function ($If) {
         /**
          * Implementation of the `DisplayIf()` verb.
-         * @category internal
+         * @internal
          */
         class ConditionalDisplayer extends Displayer {
             constructor(display, condition, display_otherwise) {
@@ -2604,7 +2685,7 @@
     (function ($Repeat) {
         /**
          *  Repeats content.
-         * @category internal
+         * @internal
          */
         class Repeater extends Mixin {
             constructor(ob, renderfn, separator) {
@@ -2696,7 +2777,7 @@
         /**
          * Repeats content and append it to the DOM until a certain threshold
          * is meant. Use it with `scrollable()` on the parent..
-         * @category internal
+         * @internal
          */
         class ScrollRepeater extends $Repeat.Repeater {
             constructor(ob, renderfn, options) {
@@ -2783,9 +2864,9 @@
     (function ($Switch) {
         /**
          * Used by the `Switch()` verb.
-         * @category internal
+         * @internal
          */
-        class Switcher extends o.VirtualObservable {
+        class Switcher extends o.CombinedObservable {
             constructor(obs) {
                 super([obs]);
                 this.obs = obs;
@@ -2974,7 +3055,7 @@
          * Separates decorators and mixins from nodes or soon-to-be-nodes from children.
          * Returns a tuple containing the decorators/mixins/attrs in one part and the children in the other.
          * The resulting arrays are 1-dimensional and do not contain null or undefined.
-         * @category internal
+         * @internal
          */
         function separate_children_from_rest(children, attrs, decorators, mixins, chld) {
             for (var i = 0, l = children.length; i < l; i++) {
@@ -3015,7 +3096,7 @@
         }
         e.renderable_to_node = renderable_to_node;
         /**
-         * @category internal
+         * @internal
          */
         function handle_decorator(node, decorator) {
             var res;
@@ -3044,7 +3125,7 @@
         e.handle_decorator = handle_decorator;
         /**
          * Handle attributes for simple nodes
-         * @category internal
+         * @internal
          */
         function handle_attrs(node, attrs, is_basic_node) {
             var keys = Object.keys(attrs);
@@ -3073,236 +3154,236 @@
             };
         }
         e.mkwrapper = mkwrapper;
-        /** @category internal */
+        /** @internal */
         e.$A = mkwrapper('a');
-        /** @category internal */
+        /** @internal */
         e.$ABBR = mkwrapper('abbr');
-        /** @category internal */
+        /** @internal */
         e.$ADDRESS = mkwrapper('address');
-        /** @category internal */
+        /** @internal */
         e.$AREA = mkwrapper('area');
-        /** @category internal */
+        /** @internal */
         e.$ARTICLE = mkwrapper('article');
-        /** @category internal */
+        /** @internal */
         e.$ASIDE = mkwrapper('aside');
-        /** @category internal */
+        /** @internal */
         e.$AUDIO = mkwrapper('audio');
-        /** @category internal */
+        /** @internal */
         e.$B = mkwrapper('b');
-        /** @category internal */
+        /** @internal */
         e.$BASE = mkwrapper('base');
-        /** @category internal */
+        /** @internal */
         e.$BDI = mkwrapper('bdi');
-        /** @category internal */
+        /** @internal */
         e.$BDO = mkwrapper('bdo');
-        /** @category internal */
+        /** @internal */
         e.$BIG = mkwrapper('big');
-        /** @category internal */
+        /** @internal */
         e.$BLOCKQUOTE = mkwrapper('blockquote');
-        /** @category internal */
+        /** @internal */
         e.$BODY = mkwrapper('body');
-        /** @category internal */
+        /** @internal */
         e.$BR = mkwrapper('br');
-        /** @category internal */
+        /** @internal */
         e.$BUTTON = mkwrapper('button');
-        /** @category internal */
+        /** @internal */
         e.$CANVAS = mkwrapper('canvas');
-        /** @category internal */
+        /** @internal */
         e.$CAPTION = mkwrapper('caption');
-        /** @category internal */
+        /** @internal */
         e.$CITE = mkwrapper('cite');
-        /** @category internal */
+        /** @internal */
         e.$CODE = mkwrapper('code');
-        /** @category internal */
+        /** @internal */
         e.$COL = mkwrapper('col');
-        /** @category internal */
+        /** @internal */
         e.$COLGROUP = mkwrapper('colgroup');
-        /** @category internal */
+        /** @internal */
         e.$DATA = mkwrapper('data');
-        /** @category internal */
+        /** @internal */
         e.$DATALIST = mkwrapper('datalist');
-        /** @category internal */
+        /** @internal */
         e.$DD = mkwrapper('dd');
-        /** @category internal */
+        /** @internal */
         e.$DEL = mkwrapper('del');
-        /** @category internal */
+        /** @internal */
         e.$DETAILS = mkwrapper('details');
-        /** @category internal */
+        /** @internal */
         e.$DFN = mkwrapper('dfn');
-        /** @category internal */
+        /** @internal */
         e.$DIALOG = mkwrapper('dialog');
-        /** @category internal */
+        /** @internal */
         e.$DIV = mkwrapper('div');
-        /** @category internal */
+        /** @internal */
         e.$DL = mkwrapper('dl');
-        /** @category internal */
+        /** @internal */
         e.$DT = mkwrapper('dt');
-        /** @category internal */
+        /** @internal */
         e.$EM = mkwrapper('em');
-        /** @category internal */
+        /** @internal */
         e.$EMBED = mkwrapper('embed');
-        /** @category internal */
+        /** @internal */
         e.$FIELDSET = mkwrapper('fieldset');
-        /** @category internal */
+        /** @internal */
         e.$FIGCAPTION = mkwrapper('figcaption');
-        /** @category internal */
+        /** @internal */
         e.$FIGURE = mkwrapper('figure');
-        /** @category internal */
+        /** @internal */
         e.$FOOTER = mkwrapper('footer');
-        /** @category internal */
+        /** @internal */
         e.$FORM = mkwrapper('form');
-        /** @category internal */
+        /** @internal */
         e.$H1 = mkwrapper('h1');
-        /** @category internal */
+        /** @internal */
         e.$H2 = mkwrapper('h2');
-        /** @category internal */
+        /** @internal */
         e.$H3 = mkwrapper('h3');
-        /** @category internal */
+        /** @internal */
         e.$H4 = mkwrapper('h4');
-        /** @category internal */
+        /** @internal */
         e.$H5 = mkwrapper('h5');
-        /** @category internal */
+        /** @internal */
         e.$H6 = mkwrapper('h6');
-        /** @category internal */
+        /** @internal */
         e.$HEAD = mkwrapper('head');
-        /** @category internal */
+        /** @internal */
         e.$HEADER = mkwrapper('header');
-        /** @category internal */
+        /** @internal */
         e.$HR = mkwrapper('hr');
-        /** @category internal */
+        /** @internal */
         e.$HTML = mkwrapper('html');
-        /** @category internal */
+        /** @internal */
         e.$I = mkwrapper('i');
-        /** @category internal */
+        /** @internal */
         e.$IFRAME = mkwrapper('iframe');
-        /** @category internal */
+        /** @internal */
         e.$IMG = mkwrapper('img');
-        /** @category internal */
+        /** @internal */
         e.$INPUT = mkwrapper('input');
-        /** @category internal */
+        /** @internal */
         e.$INS = mkwrapper('ins');
-        /** @category internal */
+        /** @internal */
         e.$KBD = mkwrapper('kbd');
-        /** @category internal */
+        /** @internal */
         e.$KEYGEN = mkwrapper('keygen');
-        /** @category internal */
+        /** @internal */
         e.$LABEL = mkwrapper('label');
-        /** @category internal */
+        /** @internal */
         e.$LEGEND = mkwrapper('legend');
-        /** @category internal */
+        /** @internal */
         e.$LI = mkwrapper('li');
-        /** @category internal */
+        /** @internal */
         e.$LINK = mkwrapper('link');
-        /** @category internal */
+        /** @internal */
         e.$MAIN = mkwrapper('main');
-        /** @category internal */
+        /** @internal */
         e.$MAP = mkwrapper('map');
-        /** @category internal */
+        /** @internal */
         e.$MARK = mkwrapper('mark');
-        /** @category internal */
+        /** @internal */
         e.$MENU = mkwrapper('menu');
-        /** @category internal */
+        /** @internal */
         e.$MENUITEM = mkwrapper('menuitem');
-        /** @category internal */
+        /** @internal */
         e.$META = mkwrapper('meta');
-        /** @category internal */
+        /** @internal */
         e.$METER = mkwrapper('meter');
-        /** @category internal */
+        /** @internal */
         e.$NAV = mkwrapper('nav');
-        /** @category internal */
+        /** @internal */
         e.$NOSCRIPT = mkwrapper('noscript');
-        /** @category internal */
+        /** @internal */
         e.$OBJECT = mkwrapper('object');
-        /** @category internal */
+        /** @internal */
         e.$OL = mkwrapper('ol');
-        /** @category internal */
+        /** @internal */
         e.$OPTGROUP = mkwrapper('optgroup');
-        /** @category internal */
+        /** @internal */
         e.$OPTION = mkwrapper('option');
-        /** @category internal */
+        /** @internal */
         e.$OUTPUT = mkwrapper('output');
-        /** @category internal */
+        /** @internal */
         e.$P = mkwrapper('p');
-        /** @category internal */
+        /** @internal */
         e.$PARAM = mkwrapper('param');
-        /** @category internal */
+        /** @internal */
         e.$PICTURE = mkwrapper('picture');
-        /** @category internal */
+        /** @internal */
         e.$PRE = mkwrapper('pre');
-        /** @category internal */
+        /** @internal */
         e.$PROGRESS = mkwrapper('progress');
-        /** @category internal */
+        /** @internal */
         e.$Q = mkwrapper('q');
-        /** @category internal */
+        /** @internal */
         e.$RP = mkwrapper('rp');
-        /** @category internal */
+        /** @internal */
         e.$RT = mkwrapper('rt');
-        /** @category internal */
+        /** @internal */
         e.$RUBY = mkwrapper('ruby');
-        /** @category internal */
+        /** @internal */
         e.$S = mkwrapper('s');
-        /** @category internal */
+        /** @internal */
         e.$SAMP = mkwrapper('samp');
-        /** @category internal */
+        /** @internal */
         e.$SCRIPT = mkwrapper('script');
-        /** @category internal */
+        /** @internal */
         e.$SECTION = mkwrapper('section');
-        /** @category internal */
+        /** @internal */
         e.$SELECT = mkwrapper('select');
-        /** @category internal */
+        /** @internal */
         e.$SMALL = mkwrapper('small');
-        /** @category internal */
+        /** @internal */
         e.$SOURCE = mkwrapper('source');
-        /** @category internal */
+        /** @internal */
         e.$SPAN = mkwrapper('span');
-        /** @category internal */
+        /** @internal */
         e.$STRONG = mkwrapper('strong');
-        /** @category internal */
+        /** @internal */
         e.$STYLE = mkwrapper('style');
-        /** @category internal */
+        /** @internal */
         e.$SUB = mkwrapper('sub');
-        /** @category internal */
+        /** @internal */
         e.$SUMMARY = mkwrapper('summary');
-        /** @category internal */
+        /** @internal */
         e.$SUP = mkwrapper('sup');
-        /** @category internal */
+        /** @internal */
         e.$TABLE = mkwrapper('table');
-        /** @category internal */
+        /** @internal */
         e.$TBODY = mkwrapper('tbody');
-        /** @category internal */
+        /** @internal */
         e.$TD = mkwrapper('td');
-        /** @category internal */
+        /** @internal */
         e.$TEXTAREA = mkwrapper('textarea');
-        /** @category internal */
+        /** @internal */
         e.$TFOOT = mkwrapper('tfoot');
-        /** @category internal */
+        /** @internal */
         e.$TH = mkwrapper('th');
-        /** @category internal */
+        /** @internal */
         e.$THEAD = mkwrapper('thead');
-        /** @category internal */
+        /** @internal */
         e.$TIME = mkwrapper('time');
-        /** @category internal */
+        /** @internal */
         e.$TITLE = mkwrapper('title');
-        /** @category internal */
+        /** @internal */
         e.$TR = mkwrapper('tr');
-        /** @category internal */
+        /** @internal */
         e.$TRACK = mkwrapper('track');
-        /** @category internal */
+        /** @internal */
         e.$U = mkwrapper('u');
-        /** @category internal */
+        /** @internal */
         e.$UL = mkwrapper('ul');
-        /** @category internal */
+        /** @internal */
         e.$VAR = mkwrapper('var');
-        /** @category internal */
+        /** @internal */
         e.$VIDEO = mkwrapper('video');
-        /** @category internal */
+        /** @internal */
         e.$WBR = mkwrapper('wbr');
         /**
          * An alias to conform to typescript's JSX
-         * @category internal
+         * @internal
          */
         e.createElement = e;
-        /** @category internal */
+        /** @internal */
         e.Fragment = $Fragment; //(at: Attrs, ch: DocumentFragment): e.JSX.Element
     })(e || (e = {}));
     if ('undefined' !== typeof window && typeof window.E === 'undefined' || typeof global !== 'undefined' && typeof (global.E) === 'undefined') {
@@ -3319,86 +3400,279 @@
         });
     };
     /**
-     * An App is a collection of building blocks that all together form an application.
-     * These blocks contain code, data and views that produce DOM elements.
+     * An App is a collection of services that altogether form an application.
+     * These services contain code, data and views that produce DOM elements.
      *
-     * It is not meant to be instanciated directly, prefer using `#App.DisplayApp` instead.
+     * Use [[App.$DisplayApp]] to instanciate an App and [[App#$DisplayChildApp]] for child apps.
      *
-     * @include ../docs/app.md
+     * An `App` needs to be provided a view name (see [[App.view]]) which will be the main
+     * view that the `App` displays, and one or several service classes (not objects), that are
+     * to be "activated", which means they will be instanciated and serve as the base services
+     * that will be searched for the main view to render it. As Services can require other services,
+     * and those services also can define views, `App` will look in them as well for the main view
+     * and will stop at the first one it finds.
+     *
+     * Services are singletons ; once required, any subsequent [[Service#require]] on a same service
+     * class will return the same instance (not always true for child apps).
+     *
+     * During the life of the application, the list of activated services can change using [[App#activate]],
+     * in which case the views will be reevaluated using the same "first one that has it" rule.
+     *
+     * As the activated services change, so do their requirements. Services that were instanciated
+     * but are not required anymore are thus removed. See [[Service#deinit]].
+     *
+     * **Why the app class**
+     *
+     * While [[Component]]s and their functional counterparts are a nice way of displaying data and
+     * somewhat handling some simple states, they should never perform network calls or in general even be *aware* of any kind of network,
+     * or query `localStorage`, or do anything other than just do what it was meant to do ; create
+     * DOM Nodes to render some data, and signal the program that some user interaction has taken place.
+     *
+     * More precisely ; Components should not deal with anything that has side effects.
+     *
+     * The `App` class and its [[App.Service]] friend are a proposal to separate pure presentation from *business logic*.
+     * Services can still have a visual role, but it is more about *layout* than display. They don't even have
+     * to do anything visual ; a Service could for instance handle network calls exclusively for instance.
+     *
+     * The idea is that an `App` is created *by composition* ; it is the sum of its services, and they can change
+     * during its life time.
+     *
+     * In a way, Services are *modules*, except they are loaded and unloaded dynamically as the application
+     * is used. They also encapsulate state neatly, and it is perfectly possible to have several `Apps` on the
+     * same page that never share data, or several that do using "child" apps.
      *
      * @category app, toc
      */
     class App extends Mixin {
-        constructor(main_view, init_list) {
+        /** @internal */
+        constructor(main_view, __parent_app) {
             super();
             this.main_view = main_view;
-            this.init_list = init_list;
-            this.registry = new App.Registry(this);
-            /** @category internal */
-            this.o_views = new o.Observable({});
+            this.__parent_app = __parent_app;
+            /** @internal */
+            this._cache = new Map();
+            /** @internal */
+            this._active_services = new Set();
+            /** @internal */
+            this._children_app = new Set();
             /**
-             * The currently active blocks, ie. the blocks that were specifically
-             * given to `#App.DisplayApp` or `this.activate`
+             * The currently active services, ie. the services that were specifically
+             * given to [[#App.$DisplayApp]] or [[App#activate]]
              */
-            this.o_active_blocks = new o.Observable(new Set());
+            this.o_active_services = o(this._active_services);
+            /**
+             * For a given view name, get the service that defines it
+             * @internal
+             */
+            this.o_view_services = o(new Map());
         }
-        /**
-         * Activate blocks to change the application's state.
-         *
-         * @param params The blocks to activate, some states to put in the
-         * registry already initialized to the correct values, etc.
-         */
-        activate(...params) {
-            var blocks = params.filter(p => typeof p === 'function');
-            const active = this.o_active_blocks.get();
-            var not_present = false;
-            for (var b of blocks) {
-                if (!active.has(b))
-                    not_present = true;
+        /** @internal */
+        inserted() {
+            var _a;
+            // Tell our parent that we exist.
+            // Now, when cleaning up, the parent will check that it doesn't remove a service
+            // that the child needs.
+            (_a = this.__parent_app) === null || _a === void 0 ? void 0 : _a._children_app.add(this);
+        }
+        /** @internal */
+        removed() {
+            // When removed, unregister ourselves from our parent app, the services we had registered
+            // now no longer hold a requirement in the parent app's cache.
+            if (this.__parent_app)
+                this.__parent_app._children_app.delete(this);
+        }
+        getService(key, init_if_not_found = true) {
+            // First try to see if we already own a version of this service.
+            var cached = this._cache.get(key);
+            if (cached)
+                return cached;
+            // Try our parent app before trying to init it ourselves.
+            if (this.__parent_app) {
+                // In the parent app however, we won't try to instanciate anything if it is not found
+                cached = this.__parent_app.getService(key, false);
+                if (cached)
+                    return cached;
             }
-            // do not activate if the active blocks are already activated
-            if (!not_present)
-                return;
-            this.registry.activate(blocks);
-            this.o_active_blocks.set(this.registry.active_blocks);
-            this.o_views.set(this.registry.getViews());
+            if (init_if_not_found) {
+                if (key.length > 1) {
+                    // Services take no arguments in their constructors, so this is a bogus require.
+                    throw new Error(`Trying to instanciate a service that requires arguments. Services should only have one`);
+                }
+                var result = new key(this);
+                if (!result.unique_across_all_apps) {
+                    this._cache.set(key, result);
+                }
+                else {
+                    var _ap = this;
+                    while (_ap.__parent_app) {
+                        _ap = _ap.__parent_app;
+                    }
+                    _ap._cache.set(key, result);
+                }
+                return result;
+            }
         }
         /**
          * @internal
          */
-        init() {
-            // Look for a parent app. If found, pick a subregistry and register it.
-            // var parent_app = App.get(this.node.parentNode!, true)
-            // this.registry.setParent(parent_app ? parent_app.registry : null)
-            this.activate(...this.init_list);
+        getServicesInRequirementOrder(active_services) {
+            var services = new Set(active_services);
+            for (var bl of services) {
+                for (var ch of bl._requirements) {
+                    services.add(ch);
+                }
+            }
+            return services;
         }
         /**
+         * Get the views defined by our currently active services
          * @internal
+         */
+        getViews() {
+            var res = new Map();
+            for (var service of this.getServicesInRequirementOrder(this.o_active_services.get())) {
+                const views = service.constructor.__views;
+                if (!views)
+                    continue;
+                for (var name of views) {
+                    if (!res.has(name))
+                        res.set(name, service);
+                }
+            }
+            return res;
+        }
+        /**
+         * Remove services that are not required anymore by the current activated services
+         * or any of their requirements. Call deinit() on the services that are removed.
+         * @internal
+         */
+        cleanup() {
+            var kept_services = new Set();
+            function keep(b) {
+                if (kept_services.has(b))
+                    return;
+                kept_services.add(b);
+                for (var req of b._requirements) {
+                    keep(req);
+                }
+            }
+            // We start by tagging services to know which are the active ones
+            // as well as their dependencies.
+            for (var bl of this._active_services) {
+                keep(bl);
+            }
+            for (var ch of this._children_app) {
+                for (var bl of ch._active_services)
+                    keep(bl);
+            }
+            // Once we know who to keep, we remove those that were not tagged.
+            for (var [key, service] of this._cache) {
+                if (!kept_services.has(service) && !service.persistent) {
+                    this._cache.delete(key);
+                    service._deinit();
+                }
+            }
+        }
+        /**
+         * Activate services to change the application's state.
          *
-         * Implementation of display
+         * See [[App.view]] for an example.
+         */
+        activate(...new_services) {
+            const active = this._active_services;
+            const new_active_services = new Set();
+            var already_has_services = true;
+            // first check for the asked new_services if
+            for (var b of new_services) {
+                const instance = this._cache.get(b);
+                if (!instance || !active.has(instance)) {
+                    already_has_services = false;
+                    break;
+                }
+            }
+            // do not activate if the active services are already activated
+            if (already_has_services)
+                return;
+            var previous_cache = new Map(this._cache);
+            try {
+                for (var b of new_services) {
+                    var bl = this.getService(b);
+                    new_active_services.add(bl);
+                }
+            }
+            catch (e) {
+                // cancel activating the new service
+                console.warn(e);
+                this._cache = previous_cache;
+                throw e;
+            }
+            this._active_services = new_active_services;
+            for (var service of new_active_services)
+                service._activate();
+            // remove dead services
+            this.cleanup();
+            o.transaction(() => {
+                this.o_active_services.set(new_active_services);
+                var views = this.getViews();
+                this.o_view_services.set(views);
+            });
+        }
+        /**
+         * Display the specified `view_name`.
+         *
+         * ```tsx
+         * @include ../examples/app.display.tsx
+         * ```
          */
         display(view_name) {
-            return $Display(this.o_views.tf((v, old, prev) => {
-                var view = v[view_name];
-                // if (sym === 'MainView')
-                //   console.log(sym, v, old, o.isValue(old) && view === old[sym])
-                if (o.isValue(old) && view === old[view_name] && o.isValue(prev)) {
-                    return prev;
+            return $Display(this.o_view_services.tf(v => {
+                return v.get(view_name);
+                // we use another tf to not retrigger the display if the service implementing the view did
+                // not change.
+            }).tf(service => {
+                if (!service) {
+                    console.warn(`view ${view_name} was not found, cannot display it`);
+                    return undefined;
                 }
-                return view && view();
+                // unfortunately, we can't specify that view_name here accesses
+                // a () => Renderable function, so we cheat.
+                return service[view_name]();
             }));
+        }
+        /**
+         * Display an App that depends on this one, displaying `view_name` as its main view
+         * and activating the service classes passed in `services`.
+         *
+         * Services in the child app that require other services will query this app if their app
+         * does not have the service defined and use it if found. Otherwise, they will instanciate
+         * their own version.
+         *
+         * Activated services in a child app are instanciated even if they already exist
+         * in the parent app.
+         *
+         * ```tsx
+         * @include ../examples/app.subapp.tsx
+         * ```
+         */
+        $DisplayChildApp(view_name, ...services) {
+            var newapp = new App(view_name, this);
+            var res = newapp.display(view_name);
+            newapp.activate(...services);
+            node_add_mixin(res, newapp);
+            return res;
         }
     }
     (function (App) {
         /**
-         * Display an application with the specified `#App.Block`s as activated blocks, displaying
+         * Display an application with the specified `#App.Service`s as activated services, displaying
          * the `main_view` view.
          *
-         * @param main_view The name of the property holding the view to display
-         * @param blocks The blocks to activate
+         * The app will look for the first service that implements the asked view in the requirement chain. See [[App.view]] for details.
          *
          * ```tsx
-         * class LoginBlock extends App.Block {
+         * import { App } from 'elt'
+         *
+         * class LoginService extends App.Service {
          *   @App.view
          *   Main() {
          *     return <div>
@@ -3408,279 +3682,143 @@
          * }
          *
          * document.body.appendChild(
-         *   App.DisplayApp('Main', LoginBlock)
+         *   App.$DisplayApp('Main', LoginService)
          * )
          * ```
          *
          * @category app, toc
          */
-        function DisplayApp(main_view, ...blocks) {
-            var app = new App(main_view, blocks);
+        function $DisplayApp(main_view, ...services) {
+            var app = new App(main_view);
             var disp = app.display(main_view);
+            app.activate(...services);
             node_add_mixin(disp, app);
             return disp;
         }
-        App.DisplayApp = DisplayApp;
+        App.$DisplayApp = $DisplayApp;
+        /**
+         * @category app, toc
+         *
+         * This is a method decorator. It marks a method of a service as a view that can be displayed with [[App.DisplayApp]]
+         * or [[App.Service#display]].
+         *
+         * Views are always a function with no arguments that return a Renderable.
+         *
+         * Starting with the activated services, and going up the [[Service.require]] calls, [[App]]
+         * uses the first view that matches the name it's looking for and uses it to display its
+         * contents.
+         *
+         * ```tsx
+         * @include ../examples/app.view.tsx
+         * ```
+         */
         function view(object, key, desc) {
             var _a;
             const cons = object.constructor;
-            cons.views = (_a = cons.views, (_a !== null && _a !== void 0 ? _a : {}));
-            cons.views[key] = desc.value;
+            (cons.__views = (_a = cons.__views, (_a !== null && _a !== void 0 ? _a : new Set()))).add(key);
         }
         App.view = view;
         /**
-         * A base class to make application blocks.
+         * A base class to make application services.
          *
-         * A block defines views through `this.view` and reacts to
+         * A service defines views through `this.view` and reacts to
          *
-         * An ObserverHolder, Blocks can use `this.observe` to watch `#o.Observable`s and will
+         * An ObserverHolder, Services can use `this.observe` to watch `#o.Observable`s and will
          * only actively watch them as long as they're either *activated* or in the *requirements* of
-         * an activated block.
+         * an activated service.
          *
-         * Blocks are meant to be used by *composition*, and not through extension.
-         * Do not subclass a Block unless its state is the exact same type.
+         * Services are meant to be used by *composition*, and not through extension.
+         * Do not subclass a subclass of Service unless its state is the exact same type.
          *
          * @category app, toc
          */
-        class Block extends o.ObserverHolder {
+        class Service extends o.ObserverHolder {
+            /**
+             * A service is not meant to be instanciated by hand. Also, classes that subclass [[Service]]
+             *  should never have any other arguments than just an [[App]] instance.
+             */
             constructor(app) {
                 super();
                 this.app = app;
-                this.views = {};
-                this.persist = false;
                 /** @internal */
-                this.registry = this.app.registry;
+                this._service_init_promise = null;
                 /** @internal */
-                this.block_init_promise = null;
-                /** @internal */
-                this.block_requirements = new Set();
-                this.app.registry.cache.set(this.constructor, this);
-            }
-            /** @internal */
-            mark(s) {
-                s.add(this.constructor);
-                this.block_requirements.forEach(req => {
-                    var proto = req.constructor;
-                    if (req instanceof o.Observable) {
-                        s.add(req.get().constructor);
-                    }
-                    if (req instanceof Block && !s.has(proto)) {
-                        req.mark(s);
-                    }
-                    else {
-                        s.add(proto);
-                    }
-                });
+                this._requirements = new Set();
             }
             /**
-             * Run `fn` on the requirements of this block, then on itself.
-             *
-             * @param fn The function to run on all blocks
-             * @param mark A set containing blocks that were already visited
-             *
+             * Wait for all the required services to init
              * @internal
              */
-            runOnRequirementsAndSelf(fn, mark = new Set()) {
-                mark.add(this);
-                this.block_requirements.forEach(req => {
-                    if (req instanceof Block && !mark.has(req)) {
-                        req.runOnRequirementsAndSelf(fn, mark);
-                    }
-                });
-                fn(this);
-            }
-            /**
-             * Wait for all the required blocks to init
-             * @internal
-             */
-            blockInit() {
+            _init() {
                 return __awaiter(this, void 0, void 0, function* () {
-                    if (this.block_init_promise) {
-                        yield this.block_init_promise;
+                    if (this._service_init_promise) {
+                        yield this._service_init_promise;
                         return;
                     }
-                    var requirement_blocks = Array.from(this.block_requirements);
-                    // This is where we wait for all the required blocks to end their init.
+                    // This is where we wait for all the required services to end their init.
                     // Now we can init.
-                    this.block_init_promise = Promise.all(requirement_blocks.map(b => b.blockInit())).then(() => this.init());
-                    yield this.block_init_promise;
+                    this._service_init_promise = Promise.all([...this._requirements].map(b => b._init())).then(() => this.init());
+                    yield this._service_init_promise;
                     this.startObservers();
                 });
             }
             /** @internal */
-            blockActivate() {
+            _activate() {
                 return __awaiter(this, void 0, void 0, function* () {
-                    yield this.blockInit();
+                    yield this._init();
                     yield this.activated();
                 });
             }
             /** @internal */
-            blockDeinit() {
+            _deinit() {
                 return __awaiter(this, void 0, void 0, function* () {
                     this.stopObservers();
                     this.deinit();
                 });
             }
             /**
-             * Extend this method to run code whenever this block is initialized, after its requirements
-             * syncInit() were run.
-             */
-            syncInit() { }
-            /**
-             * Extend this method to run code whenever the block is created after the `init()` methods
-             * of the requirements have returned.
+             * Extend this method to run code whenever after the `init()` methods
+             * of the its requirements have returned. If it had no requirements, then this method is
+             * run shortly after the Service's instanciation.
              *
-             * The `init` chain is started on activation. However, the views start displaying immediately,
-             * which means that in all likelyhood, `init()` for a block will terminate **after** the DOM
+             * The `init` chain is started on [[App#activate]]. However, the views start displaying immediately,
+             * which means that in all likelyhood, `init()` for a service will terminate **after** the DOM
              * from the views was inserted.
+             *
+             * If you need to run code **before** the views are displayed, overload the `constructor`.
              */
             init() {
                 return __awaiter(this, void 0, void 0, function* () { });
             }
             /**
-             * Extend this method to run code whenever the block is *activated* directly (ie: passed as an
+             * Extend this method to run code whenever the service is *activated* directly (ie: passed as an
              * argument to the `app.activate()` method).
              */
             activated() {
                 return __awaiter(this, void 0, void 0, function* () { });
             }
             /**
-             * Extend this method to run code whenever this block is removed from the app.
+             * Extend this method to run code whenever this service is removed from the app.
              *
-             * A block is said to be removed from the app if it is not required by any other block.
+             * A service is said to be removed from the app if it is not required by any other service.
              */
             deinit() {
                 return __awaiter(this, void 0, void 0, function* () { });
             }
             /**
-             * Require another block for this block to use. Mostly useful directly in the current block's
-             * current properties definition.
+             * Require another service for this service to use.
              *
-             * ```tsx
-             * class MyBlock extends App.Block {
-             *   // declare this block dependencies as properties
-             *   auth = this.require(AuthBlock)
+             * If the requested service does not already exist within this [[App]], instanciate it.
              *
-             *   someMethod() {
-             *     // since auth is now a property, I can use it as any object.
-             *     console.log(this.auth.isLoggedIn())
-             *   }
-             * }
-             * ```
-             *
-             * @param block_def another block's constructor
+             * See [[App.$DisplayChildApp]] and [[App.view]] for examples.
              */
-            require(block_def) {
-                var result = this.registry.get(block_def);
-                this.block_requirements.add(result);
+            require(service_def) {
+                var result = this.app.getService(service_def);
+                this._requirements.add(result);
                 return result;
             }
-            /**
-             * Acts as a verb that displays the specified `view_name`
-             *
-             * ```tsx
-             * // ... inside a Block subclass declaration.
-             * ToolbarView = this.view(() => <div>
-             *   <h3>My Title</h3>
-             *   {this.display('MoreToolbar')}
-             * </div>)
-             *
-             * // MoreToolbar can be redefined in other blocks, which will then be displayed
-             * // by app.display if they come before the current block in the requirements.
-             * MoreToolbar = this.view(() => <Button click={e => doSomething()}>Something</Button>)
-             * // ...
-             * ```
-             * @param fn
-             */
-            // v should be AllowedNames<this, View> ! but it is a bug with ts 3.6.2
-            display(v) {
-                return this.app.display(v);
-            }
         }
-        App.Block = Block;
-        /**
-         * A registry that holds types mapped to their instance.
-         * @category internal
-         */
-        class Registry {
-            constructor(app) {
-                this.app = app;
-                this.cache = new Map();
-                this.persistents = new Set();
-                this.init_list = new Set();
-                this.active_blocks = new Set();
-            }
-            get(key) {
-                // First try to see if we own a version of this service.
-                var first_attempt = this.cache.get(key);
-                if (first_attempt)
-                    return first_attempt;
-                // If neither we nor the parent have the instance, create it ourselve.
-                // We just check that the asked class/function has one argument, in which
-                // case we give it the app as it *should* be a block (we do not allow
-                // constructors with parameters for data services)
-                var result = new key(this.app);
-                this.init_list.add(result);
-                if (result.persist)
-                    this.persistents.add(result);
-                return result;
-            }
-            getViews() {
-                var views = {};
-                this.active_blocks.forEach(inst => {
-                    var block = this.get(inst);
-                    block.runOnRequirementsAndSelf(b => {
-                        var _a;
-                        const cons = b.constructor;
-                        const v = (_a = cons.views, (_a !== null && _a !== void 0 ? _a : {}));
-                        for (var key of Object.getOwnPropertyNames(v)) {
-                            views[key] = v[key].bind(b);
-                        }
-                    });
-                });
-                return views;
-            }
-            /**
-             * Activate the given blocks with the given data
-             * If all the blocks were already active, then only the data will be set,
-             * but the views won't be refreshed (as they're the same).
-             *
-             * @param blocks: The blocks to activate
-             * @param data: The data to preload
-             */
-            activate(blocks) {
-                this.active_blocks = new Set(blocks);
-                var insts = Array.from(this.active_blocks).map(b => this.get(b));
-                insts.forEach(i => i.blockActivate());
-                this.cleanup();
-                this.initPending();
-            }
-            /**
-             * Remove entries from the registry
-             */
-            cleanup() {
-                var mark = new Set();
-                this.persistents.forEach(b => b.mark(mark));
-                this.active_blocks.forEach(bl => {
-                    var b = this.cache.get(bl);
-                    b.mark(mark);
-                });
-                // now, we sweep
-                this.cache.forEach((value, key) => {
-                    if (!mark.has(key)) {
-                        this.cache.delete(key);
-                        value.blockDeinit();
-                    }
-                });
-            }
-            initPending() {
-                for (var block of this.init_list) {
-                    this.init_list.delete(block);
-                    block.blockInit();
-                }
-            }
-        }
-        App.Registry = Registry;
+        App.Service = Service;
     })(App || (App = {}));
 
     exports.$Display = $Display;

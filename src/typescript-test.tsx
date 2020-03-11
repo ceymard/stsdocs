@@ -104,12 +104,9 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
         </div>
       </div>
       <div class='st-docmain'>
-        {raw(md.render(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8').replace(/\[\[(.+?)\]\]/g, (m, name) => {
-      // var first = this.declarations[0]
-      var dc = Documentable.name_map.get(name)
-      // console.log(name, dc?.kind)
-      return `[\`${name}${dc?.kind === 'function' ? '()' : ''}\`](#${name})`
-    })))}
+        {raw(md.render(Documentable.doclinks(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')), {
+          html: true
+        }))}
         <h1>API Documentation</h1>
         {all_declarations.filter(d => !d.tags.has('internal')).map(decl => <Declaration doc={decl}/>)}
       </div>

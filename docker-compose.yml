@@ -1,0 +1,8 @@
+web:
+  image: nginx
+  volumes:
+   - ./out:/usr/share/nginx/html:ro
+  environment:
+   - NGINX_HOST=devcey-docs.sales-way.com
+   - NGINX_PORT=80
+   - VIRTUAL_HOST=devcey-docs.sales-way.com
