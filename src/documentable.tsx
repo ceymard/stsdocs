@@ -156,7 +156,7 @@ export class Documentable {
         return ''
       })
       .replace(/@include\s*([^\n]+)\s*\n?/g, (_, path: string) => {
-        var try_path = pth.join(pth.dirname(src_path), path)
+        var try_path = pth.join(pth.dirname(src_path), path.trim())
         try {
           return fs.readFileSync(try_path, 'utf-8')
         } catch (e) {
