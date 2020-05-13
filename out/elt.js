@@ -86,29 +86,11 @@
     }
     (function (o_1) {
         /**
-         * This class represents "no value", which is how Observers, Changes and Observable can
-         * identify when a value changes from not existing to having a value.
+         * A constant symbol representing the fact that there is no value.
          *
-         * Think of it as a kind of `undefined`, which we couldn't use since `undefined` has a meaning and
-         * is widely used.
-         *
-         * See `#o.NOVALUE`
-         *
-         * @category observable, toc
+         * Used in Observers and combined observables to know when a value has been set for the first time.
          */
-        class NoValue {
-            constructor() { }
-        }
-        o_1.NoValue = NoValue;
-        /**
-         * The only instance of the `NoValue` class.
-         *
-         * > **note**: the NoValue system is still pretty "hacky" in terms of typings, as its use is so far
-         * > limited to implementing virtual observables that have readonly values or internally when checking
-         * > if `Observer`s should be called. This will be made better in future releases.
-         *
-         */
-        o_1.NOVALUE = new NoValue();
+        o_1.NOVALUE = Symbol('NOVALUE');
         function isReadonlyObservable(_) {
             return _ instanceof Observable;
         }
@@ -190,7 +172,7 @@
             }
             refresh() {
                 const old = this.old_value;
-                const new_value = this.observable.__value;
+                const new_value = this.observable._value;
                 if (old !== new_value) {
                     // only store the old_value if the observer will need it. Useful to not keep
                     // useless references in memory.
@@ -218,13 +200,13 @@
         function each_recursive(obs, fn) {
             var objs = [];
             var stack = [];
-            var [children, i] = [obs.__children.arr, 0];
+            var [children, i] = [obs._children.arr, 0];
             objs.push(obs);
             while (true) {
                 var _child = children[i];
                 if (_child) {
                     var child = _child.child;
-                    var subchildren = child.__children.arr;
+                    var subchildren = child._children.arr;
                     objs.push(child);
                     if (subchildren.length) {
                         stack.push([children, i + 1]);
@@ -278,12 +260,12 @@
                     if (obs == null)
                         continue;
                     if (obs instanceof CombinedObservable) {
-                        obs.__value = obs.getter(obs.__parents_values);
+                        obs._value = obs.getter(obs._parents_values);
                     }
-                    EACH(obs.__children, ch => {
-                        ch.child.__parents_values[ch.child_idx] = ch.parent.__value;
+                    EACH(obs._children, ch => {
+                        ch.child._parents_values[ch.child_idx] = ch.parent._value;
                     });
-                    EACH(obs.__observers, o => o.refresh());
+                    EACH(obs._observers, o => o.refresh());
                     obs.idx = null;
                     arr[i] = null; // just in case...
                 }
@@ -331,7 +313,7 @@
                 this.idx = null;
             }
             refresh() {
-                this.child.__parents_values[this.child_idx] = this.parent.__value;
+                this.child._parents_values[this.child_idx] = this.parent._value;
             }
         }
         o_1.ChildObservableLink = ChildObservableLink;
@@ -346,14 +328,14 @@
             /**
              * Build an observable from a value. For readability purposes, use the [[o]] function instead.
              */
-            constructor(__value) {
-                this.__value = __value;
+            constructor(_value) {
+                this._value = _value;
                 /** @internal */
-                this.__observers = new IndexableArray();
+                this._observers = new IndexableArray();
                 /** @internal */
-                this.__children = new IndexableArray();
+                this._children = new IndexableArray();
                 /** @internal */
-                this.__watched = false;
+                this._watched = false;
                 /** The index of this Observable in the notify queue. If null, means that it's not scheduled.
                  * @internal
                 */
@@ -368,12 +350,12 @@
                 each_recursive(this, ob => {
                     if (ob.idx)
                         queue.delete(ob);
-                    ob.__observers.clear();
-                    if (ob.__watched) {
-                        ob.__watched = false;
+                    ob._observers.clear();
+                    if (ob._watched) {
+                        ob._watched = false;
                         ob.unwatched();
                     }
-                    ob.__children.clear();
+                    ob._children.clear();
                 });
             }
             /**
@@ -382,24 +364,17 @@
              * NOTE: treat this value as being entirely readonly !
              */
             get() {
-                return this.__value;
+                return this._value;
             }
             /**
              * Set the value of the observable and notify the observers listening
              * to this object of this new value.
              */
             set(value) {
-                const old = this.__value;
-                this.__value = value;
+                const old = this._value;
+                this._value = value;
                 if (old !== value)
                     queue.schedule(this);
-            }
-            /**
-             * Expects a `fn` callback that takes the current value as a parameter and returns a new value.
-             * It is the responsability of the caller to ensure the object is properly cloned before being modified.
-             */
-            mutate(fn) {
-                this.set(fn(this.__value));
             }
             assign(partial) {
                 this.set(o.assign(this.get(), partial));
@@ -418,7 +393,7 @@
                     _ob = this.createObserver(_ob);
                 }
                 const ob = _ob;
-                this.__observers.add(_ob);
+                this._observers.add(_ob);
                 this.checkWatch();
                 if (this.idx == null)
                     ob.refresh();
@@ -431,7 +406,7 @@
             addChild(ch) {
                 if (ch.idx != null)
                     return;
-                this.__children.add(ch);
+                this._children.add(ch);
                 if (this.idx != null)
                     queue.add(ch.child);
                 this.checkWatch();
@@ -442,7 +417,7 @@
             removeChild(ch) {
                 if (ch.idx == null)
                     return;
-                this.__children.delete(ch);
+                this._children.delete(ch);
                 this.checkWatch();
             }
             /**
@@ -454,7 +429,7 @@
              *
              */
             removeObserver(ob) {
-                this.__observers.delete(ob);
+                this._observers.delete(ob);
                 this.checkWatch();
             }
             /**
@@ -464,14 +439,14 @@
              * @internal
              */
             checkWatch() {
-                if (this.__watched && this.__observers.real_size === 0 && this.__children.real_size === 0) {
-                    this.__watched = false;
+                if (this._watched && this._observers.real_size === 0 && this._children.real_size === 0) {
+                    this._watched = false;
                     if (this.idx != null)
                         queue.delete(this);
                     this.unwatched();
                 }
-                else if (!this.__watched && this.__observers.real_size + this.__children.real_size > 0) {
-                    this.__watched = true;
+                else if (!this._watched && this._observers.real_size + this._children.real_size > 0) {
+                    this._watched = true;
                     this.watched();
                 }
             }
@@ -496,9 +471,9 @@
                     return curval;
                 }, (newv, old, [curr, conv]) => {
                     if (typeof conv === 'function')
-                        return;
+                        return tuple(o_1.NOVALUE, o_1.NOVALUE);
                     var new_orig = conv.set(newv, old, curr);
-                    return [new_orig, o.NOVALUE];
+                    return tuple(new_orig, o.NOVALUE);
                 });
             }
             /**
@@ -521,8 +496,25 @@
              * const o_base_2_item = o_base_2.p(2) // Observable<number>
              * ```
              */
-            p(key) {
-                return prop(this, key);
+            p(key, def) {
+                return prop(this, key, def);
+            }
+            key(key, def, delete_on_undefined = true) {
+                return combine([this, key, def, delete_on_undefined], ([map, key, def]) => {
+                    var res = map.get(key);
+                    if (res === undefined && def) {
+                        res = def(key, map);
+                    }
+                    return res;
+                }, (ret, _, [omap, okey, _2, delete_on_undefined]) => {
+                    var result = new Map(omap); //.set(okey, ret)
+                    // Is this correct ? should I **delete** when I encounter undefined ?
+                    if (ret !== undefined || !delete_on_undefined)
+                        result.set(okey, ret);
+                    else
+                        result.delete(okey);
+                    return tuple(result, o_1.NOVALUE, o_1.NOVALUE, o_1.NOVALUE);
+                });
             }
         }
         o_1.Observable = Observable;
@@ -536,9 +528,9 @@
             constructor(deps) {
                 super(o_1.NOVALUE);
                 /** @internal */
-                this.__links = [];
+                this._links = [];
                 /** @internal */
-                this.__parents_values = [];
+                this._parents_values = [];
                 this.dependsOn(deps);
             }
             getter(values) {
@@ -548,23 +540,23 @@
                 return nval; // by default, just forward the type
             }
             watched() {
-                const p = this.__parents_values;
-                for (var i = 0, l = this.__links; i < l.length; i++) {
+                const p = this._parents_values;
+                for (var i = 0, l = this._links; i < l.length; i++) {
                     var link = l[i];
                     link.parent.addChild(link);
-                    p[link.child_idx] = link.parent.__value;
+                    p[link.child_idx] = link.parent._value;
                 }
-                this.__value = this.getter(p);
+                this._value = this.getter(p);
             }
             unwatched() {
-                for (var i = 0, l = this.__links; i < l.length; i++) {
+                for (var i = 0, l = this._links; i < l.length; i++) {
                     var link = l[i];
                     link.parent.removeChild(link);
                 }
             }
             refreshParentValues() {
                 var changed = false;
-                for (var i = 0, l = this.__links, p = this.__parents_values; i < l.length; i++) {
+                for (var i = 0, l = this._links, p = this._parents_values; i < l.length; i++) {
                     var link = l[i];
                     var idx = link.child_idx;
                     var old = p[idx];
@@ -577,29 +569,29 @@
                 return changed;
             }
             get() {
-                if (!this.__watched) {
-                    if (this.refreshParentValues() || this.__value === o_1.NOVALUE) {
-                        this.__value = this.getter(this.__parents_values);
+                if (!this._watched) {
+                    if (this.refreshParentValues() || this._value === o_1.NOVALUE) {
+                        this._value = this.getter(this._parents_values);
                     }
                 }
-                return this.__value;
+                return this._value;
             }
             set(value) {
                 // Do not trigger the set chain if the value did not change.
-                if (!this.__watched)
-                    this.__value = this.getter(this.__parents_values);
-                if (value === this.__value)
+                if (!this._watched)
+                    this._value = this.getter(this._parents_values);
+                if (value === this._value)
                     return;
-                const old_value = this.__value;
-                if (!this.__watched)
+                const old_value = this._value;
+                if (!this._watched)
                     this.refreshParentValues();
-                const res = this.setter(value, old_value, this.__parents_values);
+                const res = this.setter(value, old_value, this._parents_values);
                 if (res == undefined)
                     return;
-                for (var i = 0, l = this.__links, len = l.length; i < len; i++) {
+                for (var i = 0, l = this._links, len = l.length; i < len; i++) {
                     var link = l[i];
                     var newval = res[link.child_idx];
-                    if (newval !== o_1.NOVALUE && newval !== link.parent.__value) {
+                    if (newval !== o_1.NOVALUE && newval !== link.parent._value) {
                         link.parent.set(newval);
                     }
                 }
@@ -610,15 +602,15 @@
                 for (var l = obs.length, i = 0; i < l; i++) {
                     var ob = obs[i];
                     if (ob instanceof Observable) {
-                        p[i] = ob.__value;
+                        p[i] = ob._value;
                         ch.push(new ChildObservableLink(ob, this, ch.length));
                     }
                     else {
                         p[i] = ob;
                     }
                 }
-                this.__links = ch;
-                this.__parents_values = p;
+                this._links = ch;
+                this._parents_values = p;
                 return this;
             }
         }
@@ -645,11 +637,16 @@
         /**
          * @category observable, toc
          */
-        function prop(obj, prop) {
-            return combine([obj, prop], ([obj, prop]) => obj[prop], (nval, _, [orig, prop]) => {
+        function prop(obj, prop, def) {
+            return combine(tuple(obj, prop, def), ([obj, prop, def]) => {
+                var res = obj[prop];
+                if (res === undefined && def)
+                    res = def(prop, obj);
+                return res;
+            }, (nval, _, [orig, prop]) => {
                 const newo = o.clone(orig);
                 newo[prop] = nval;
-                return o.tuple(newo, o.NOVALUE);
+                return tuple(newo, o_1.NOVALUE, o_1.NOVALUE);
             });
         }
         o_1.prop = prop;
@@ -853,21 +850,20 @@
             return t;
         }
         o_1.tuple = tuple;
+        function object(t) {
+            return t;
+        }
+        o_1.object = object;
         function clone(obj) {
             if (obj == null || typeof obj === 'number' || typeof obj === 'string' || typeof obj === 'boolean')
                 return obj;
             var clone;
-            var len;
             var key;
             if (obj[o_1.clone_symbol]) {
                 return obj[o_1.clone_symbol]();
             }
             if (Array.isArray(obj)) {
-                len = obj.length;
-                clone = new Array(len);
-                for (key = 0; key < len; key++)
-                    clone[key] = obj[key];
-                return clone;
+                return obj.slice();
             }
             if (obj instanceof Date) {
                 return new Date(obj.getTime()); // timezone ?
@@ -881,16 +877,10 @@
                     + obj.sticky ? 'y' : '');
             }
             if (obj instanceof Map) {
-                clone = new Map();
-                obj.forEach((key, value) => {
-                    clone.set(key, value);
-                });
-                return clone;
+                return new Map(obj);
             }
             if (obj instanceof Set) {
-                clone = new Set();
-                obj.forEach(val => clone.add(val));
-                return clone;
+                return new Set(obj);
             }
             // If we got here, then we're cloning an object
             var prototype = Object.getPrototypeOf(obj);
@@ -940,7 +930,8 @@
         class ObserverHolder {
             constructor() {
                 /** @internal */
-                this.__observers = [];
+                this._observers = [];
+                this._callback_queue = undefined;
                 /**
                  * Boolean indicating if this object is actively observing its observers.
                  */
@@ -951,16 +942,25 @@
              * @internal
              */
             startObservers() {
-                for (var ob of this.__observers)
-                    ob.startObserving();
+                var cbk = this._callback_queue;
+                if (cbk) {
+                    for (var i = 0, l = cbk.length; i < l; i++) {
+                        cbk[i]();
+                    }
+                    this._callback_queue = undefined;
+                }
+                for (var obss = this._observers, i = 0, l = obss.length; i < l; i++) {
+                    obss[i].startObserving();
+                }
                 this.is_observing = true;
             }
             /**
              * Stop all the observers on this holder from observing.
              */
             stopObservers() {
-                for (var ob of this.__observers)
-                    ob.stopObserving();
+                for (var obss = this._observers, i = 0, l = obss.length; i < l; i++) {
+                    obss[i].stopObserving();
+                }
                 this.is_observing = false;
             }
             /**
@@ -969,18 +969,21 @@
             observe(obs, fn, observer_callback) {
                 var _a;
                 if (!(obs instanceof Observable)) {
-                    fn(obs, new Changes(obs));
+                    if (this.is_observing)
+                        fn(obs, new Changes(obs));
+                    else
+                        (this._callback_queue = (_a = this._callback_queue) !== null && _a !== void 0 ? _a : []).push(() => fn(obs, new Changes(obs)));
                     return null;
                 }
                 const observer = o(obs).createObserver(fn);
-                (_a = observer_callback) === null || _a === void 0 ? void 0 : _a(observer);
+                observer_callback === null || observer_callback === void 0 ? void 0 : observer_callback(observer);
                 return this.addObserver(observer);
             }
             /**
              * Add an observer to the observers array.
              */
             addObserver(observer) {
-                this.__observers.push(observer);
+                this._observers.push(observer);
                 if (this.is_observing)
                     observer.startObserving();
                 return observer;
@@ -989,11 +992,11 @@
              * Remove the observer from this holder and stop it from observing
              */
             unobserve(observer) {
-                const idx = this.__observers.indexOf(observer);
+                const idx = this._observers.indexOf(observer);
                 if (idx > -1) {
                     if (this.is_observing)
                         observer.stopObserving();
-                    this.__observers.splice(idx, 1);
+                    this._observers.splice(idx, 1);
                 }
             }
         }
@@ -1166,7 +1169,7 @@
                         for (var i = 0, l = lst.length; i < l; i++) {
                             var item = lst[i];
                             var ex = extractor(item);
-                            var ls = (_c = m.get(ex), (_c !== null && _c !== void 0 ? _c : m.set(ex, []).get(ex)));
+                            var ls = (_c = m.get(ex)) !== null && _c !== void 0 ? _c : m.set(ex, []).get(ex);
                             ls.push(i);
                         }
                         var res = [];
@@ -1312,12 +1315,12 @@
      * @category low level dom, toc
      */
     const sym_removed = Symbol('elt-removed');
-    const NODE_IS_INITED = 0x01;
-    const NODE_IS_INSERTED = 0x10;
+    const NODE_IS_INITED = 0x001;
+    const NODE_IS_INSERTED = 0x010;
     const NODE_IS_OBSERVING = 0x100;
     function _node_call_cbks(node, sym, parent) {
         var cbks = node[sym];
-        parent = (parent !== null && parent !== void 0 ? parent : node.parentNode);
+        parent = parent !== null && parent !== void 0 ? parent : node.parentNode;
         if (cbks) {
             for (var i = 0, l = cbks.length; i < l; i++) {
                 cbks[i](node, parent);
@@ -1401,14 +1404,31 @@
      * @internal
      */
     function node_do_init(node) {
-        // if there is anything in the status, it means the node was inited before,
-        // so we don't do that again.
-        if (!(node[sym_mount_status] & NODE_IS_INITED))
+        if (!(node[sym_mount_status] & NODE_IS_INITED)) {
             _node_call_cbks(node, sym_init);
-        if (!(node[sym_mount_status] & NODE_IS_OBSERVING))
-            // call init functions
-            _node_start_observers(node);
-        node[sym_mount_status] = NODE_IS_INITED | NODE_IS_OBSERVING;
+            // We free the inits
+            node[sym_init] = undefined;
+        }
+        // _node_start_observers(node)
+        // We now refresh all the observers so that they trigger their behaviour.
+        // They are however not started, since nodes could be discarded.
+        var observers = node[sym_observers];
+        if (observers) {
+            for (var i = 0, l = observers.length; i < l; i++) {
+                observers[i].refresh();
+            }
+        }
+        var mx = node[sym_mixins];
+        if (mx) {
+            for (var i = 0, l = mx.length; i < l; i++) {
+                var mx_observers = mx[i]._observers;
+                for (var j = 0, lj = mx_observers.length; j < lj; j++) {
+                    mx_observers[j].refresh();
+                }
+            }
+        }
+        node[sym_mount_status] = NODE_IS_INITED;
+        // node[sym_mount_status] = NODE_IS_INITED | NODE_IS_OBSERVING
     }
     function _apply_inserted(node) {
         var st = node[sym_mount_status] || 0;
@@ -1419,9 +1439,8 @@
         if (!(st & NODE_IS_OBSERVING))
             _node_start_observers(node);
         // then, call inserted.
-        if (!(st & NODE_IS_INSERTED)) {
+        if (!(st & NODE_IS_INSERTED))
             _node_call_cbks(node, sym_inserted);
-        }
         node[sym_mount_status] = NODE_IS_INITED | NODE_IS_INSERTED | NODE_IS_OBSERVING; // now inserted
     }
     /**
@@ -1432,25 +1451,25 @@
             return;
         var iter = node.firstChild;
         var stack = [];
-        // We build here a stack where parents are added first and children last
         _apply_inserted(node);
         while (iter) {
+            var already_inserted = iter[sym_mount_status] & NODE_IS_INSERTED;
+            if (!already_inserted) {
+                _apply_inserted(iter);
+            }
+            var first;
             // we ignore an entire subtree if the node is already marked as inserted
             // in all other cases, the node will be inserted
-            if (!(iter[sym_mount_status] & NODE_IS_INSERTED)) {
-                _apply_inserted(iter);
-                var first = iter.firstChild;
-                if (first) {
-                    var next = iter.nextSibling; // where we'll pick up when we unstack.
-                    if (next)
-                        stack.push(next);
-                    iter = first; // we will keep going to the children
-                    continue;
-                }
-                else if (iter.nextSibling) {
-                    iter = iter.nextSibling;
-                    continue;
-                }
+            if (!already_inserted && (first = iter.firstChild)) {
+                var next = iter.nextSibling; // where we'll pick up when we unstack.
+                if (next)
+                    stack.push(next);
+                iter = first; // we will keep going to the children
+                continue;
+            }
+            else if (iter.nextSibling) {
+                iter = iter.nextSibling;
+                continue;
             }
             iter = stack.pop();
         }
@@ -1465,7 +1484,7 @@
             _node_stop_observers(node);
             st = st ^ NODE_IS_OBSERVING;
         }
-        if (prev_parent && st & NODE_IS_INSERTED) {
+        if (st & NODE_IS_INSERTED) {
             _node_call_cbks(node, sym_removed);
             st = st ^ NODE_IS_INSERTED;
         }
@@ -1483,22 +1502,23 @@
         const node_stack = [];
         var iter = node.firstChild;
         while (iter) {
-            while (iter.firstChild) {
+            var first;
+            while ((first = iter.firstChild) && (first[sym_mount_status] & NODE_IS_INSERTED)) {
                 node_stack.push(iter);
-                iter = iter.firstChild;
+                iter = first;
             }
-            _apply_removed(iter, prev_parent ? iter.parentNode : null);
+            _apply_removed(iter, iter.parentNode);
             // When we're here, we're on a terminal node, so
             // we're going to have to process it.
             while (iter && !iter.nextSibling) {
                 iter = node_stack.pop();
                 if (iter)
-                    _apply_removed(iter, prev_parent ? iter.parentNode : null);
+                    _apply_removed(iter, iter.parentNode);
             }
             // So now we're going to traverse the next node.
             iter = iter && iter.nextSibling;
         }
-        _apply_removed(node, prev_parent);
+        _apply_removed(node);
     }
     /**
      * Remove a `node` from the tree and call `removed` on its mixins and all the `removed` callbacks..
@@ -1511,13 +1531,9 @@
     function remove_node(node) {
         const parent = node.parentNode;
         if (parent) {
-            // (m as any).node = null
             parent.removeChild(node);
-            node_do_remove(node, parent);
         }
-        else {
-            node_do_remove(node, null); // just stop observers otherwise...
-        }
+        node_do_remove(node); // just stop observers otherwise...
     }
     /**
      * This is where we keep track of the registered documents.
@@ -1570,11 +1586,6 @@
                 var record = records[i];
                 for (var added = Array.from(record.addedNodes), j = 0, lj = added.length; j < lj; j++) {
                     var added_node = added[j];
-                    // skip this node if it is already marked as inserted, as it means verbs already
-                    // have performed the mounting for this element
-                    if (added_node[sym_mount_status] & NODE_IS_INSERTED) {
-                        continue;
-                    }
                     node_do_inserted(added_node);
                 }
                 for (var removed = Array.from(record.removedNodes), j = 0, lj = removed.length; j < lj; j++) {
@@ -1584,11 +1595,11 @@
             }
         });
         // Make sure that when closing the window, everything gets cleaned up
-        const target_document = (_a = node.ownerDocument, (_a !== null && _a !== void 0 ? _a : node));
+        const target_document = ((_a = node.ownerDocument) !== null && _a !== void 0 ? _a : node);
         if (!_registered_documents.has(target_document)) {
             (_b = target_document.defaultView) === null || _b === void 0 ? void 0 : _b.addEventListener('unload', ev => {
                 // Calls a `removed` on all the nodes in the closing window.
-                node_do_remove(target_document.firstChild, target_document);
+                node_do_remove(target_document.firstChild);
                 obs.disconnect();
             });
         }
@@ -1651,16 +1662,18 @@
     /**
      * Tie the observal of an `#Observable` to the presence of this node in the DOM.
      *
-     * Observers are called whenever the observable changes **and** the node is contained
-     * in the document.
-     *
      * Used mostly by [[$observe]] and [[Mixin.observe]]
      *
      * @category low level dom, toc
      */
     function node_observe(node, obs, obsfn, observer_callback) {
         if (!(o.isReadonlyObservable(obs))) {
-            obsfn(obs, new o.Changes(obs));
+            // If the node is already inited, run the callback
+            if (node[sym_mount_status] & NODE_IS_INITED)
+                obsfn(obs, new o.Changes(obs));
+            else
+                // otherwise, call it when inited
+                node_on(node, sym_init, () => obsfn(obs, new o.Changes(obs)));
             return null;
         }
         // Create the observer and append it to the observer array of the node
@@ -1834,7 +1847,7 @@
      */
     function node_on(node, sym, callback) {
         var _a;
-        (node[sym] = (_a = node[sym], (_a !== null && _a !== void 0 ? _a : []))).push(callback);
+        (node[sym] = (_a = node[sym]) !== null && _a !== void 0 ? _a : []).push(callback);
     }
     /**
      * Remove a previously associated `callback` from the life-cycle event `sym` for the `node`.
@@ -1842,7 +1855,7 @@
      */
     function node_off(node, sym, callback) {
         var _a;
-        (node[sym] = (_a = node[sym], (_a !== null && _a !== void 0 ? _a : []))).filter(f => f !== callback);
+        (node[sym] = (_a = node[sym]) !== null && _a !== void 0 ? _a : []).filter(f => f !== callback);
     }
     /**
      * Remove all the nodes after `start` until `until` (included), calling `removed` and stopping observables as needed.
@@ -1852,8 +1865,10 @@
         if (!start)
             return;
         var next;
+        var parent = start.parentNode;
         while ((next = start.nextSibling)) {
-            remove_node(next);
+            parent.removeChild(next);
+            node_do_remove(next);
             if (next === until)
                 break;
         }
@@ -1877,7 +1892,7 @@
          * Bind an observable to an input's value.
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_string = o('stuff')
          *
@@ -1898,7 +1913,7 @@
          * Bind a string observable to an html element which is contenteditable.
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_contents = o('Hello <b>World</b> !')
          *
@@ -1928,7 +1943,7 @@
          * and will set the value to `NaN`.
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_number = o(1)
          *
@@ -1950,7 +1965,7 @@
          * type `"date"` `"datetime"` `"datetime-local"`.
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_date = o(null as Date | null)
          * const dtf = Intl.DateTimeFormat('fr')
@@ -1973,7 +1988,7 @@
          * is "radio" or "checkbox".
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_bool = o(false)
          *
@@ -1994,7 +2009,7 @@
          * Bind a number observable to the selected index of a select element
          *
          * ```tsx
-         * import { o, $bind, $Fragment as $ } from 'elt'
+         * import { o, $bind, Fragment as $ } from 'elt'
          *
          * const o_selected = o(-1)
          *
@@ -2056,7 +2071,7 @@
      * The `class={}` attribute on all nodes works exactly the same as `$class`.
      *
      * ```tsx
-     * import { $class, o, $Fragment as $, $bind } from 'elt'
+     * import { $class, o, Fragment as $, $bind } from 'elt'
      *
      * const o_cls = o('class2')
      * const o_bool = o(false)
@@ -2202,8 +2217,8 @@
      * ELT tries to do most of the work in `DocumentFragment` or while the nodes are still in memory.
      *
      * When calling [[e]] (or `E()`), whenever a node appends a child to itself, `e` calls its
-     * `$init` callbacks **and start the node's observers**. It does so because some verbs, like `$If`
-     * will only update their content when observing their condition, not before. Since `$If` uses enclosing
+     * `$init` callbacks **and start the node's observers**. It does so because some verbs, like `If`
+     * will only update their content when observing their condition, not before. Since `If` uses enclosing
      * comments to find out what it has to replace, it needs to have access to its parent to manipulate its
      * siblings, hence this particular way of proceeding.
      *
@@ -2212,7 +2227,7 @@
      * leave the observers to do their jobs.
      *
      * ```jsx
-     * import { o, $init, $inserted, $removed, $Fragment as $, $If, $click } from 'elt'
+     * import { o, $init, $inserted, $removed, Fragment as $, If, $click } from 'elt'
      *
      * var the_div = <div>
      *   {$init(() => console.log('init'))}
@@ -2230,7 +2245,7 @@
      *     {$click(() => o_is_inside.mutate(b => !b))}
      *     Toggle the div
      *   </button>
-     *   {$If(o_is_inside, () => the_div)}
+     *   {If(o_is_inside, () => the_div)}
      * </$>)
      *
      * ```
@@ -2274,26 +2289,23 @@
      * Calling this functions makes anything not marked scrollable as non-scrollable.
      * @category dom, toc
      */
-    function $scrollable() {
-        return (node) => {
-            $scrollable.setUpNoscroll(node.ownerDocument);
-            var style = node.style;
-            style.overflowY = 'auto';
-            style.overflowX = 'auto';
-            // seems like typescript doesn't have this property yet
-            style.webkitOverflowScrolling = 'touch';
-            node_add_event_listener(node, 'touchstart', ev => {
-                if (ev.currentTarget.scrollTop == 0) {
-                    node.scrollTop = 1;
-                }
-                else if (node.scrollTop + node.offsetHeight >= node.scrollHeight - 1)
-                    node.scrollTop -= 1;
-            });
-            node_add_event_listener(node, 'touchmove', ev => {
-                if (ev.currentTarget.offsetHeight < ev.currentTarget.scrollHeight)
-                    ev[$scrollable.sym_letscroll] = true;
-            });
-        };
+    function $scrollable(node) {
+        $scrollable.setUpNoscroll(node.ownerDocument);
+        var style = node.style;
+        style.overflowY = 'auto';
+        style.overflowX = 'auto';
+        style.webkitOverflowScrolling = 'touch';
+        node_add_event_listener(node, 'touchstart', ev => {
+            if (ev.currentTarget.scrollTop == 0) {
+                node.scrollTop = 1;
+            }
+            else if (node.scrollTop + node.offsetHeight >= node.scrollHeight - 1)
+                node.scrollTop -= 1;
+        });
+        node_add_event_listener(node, 'touchmove', ev => {
+            if (ev.currentTarget.offsetHeight < ev.currentTarget.scrollHeight)
+                ev[$scrollable.sym_letscroll] = true;
+        });
     }
     (function ($scrollable) {
         /** @internal */
@@ -2383,10 +2395,13 @@
         static get(node, recursive = true) {
             let iter = node; // yeah yeah, I know, it's an EventTarget as well but hey.
             while (iter) {
-                var mixin_iter = iter[sym_mixins];
-                while (mixin_iter) {
-                    if (mixin_iter instanceof this)
-                        return mixin_iter;
+                var mixins = iter[sym_mixins];
+                if (mixins) {
+                    for (var i = 0, l = mixins.length; i < l; i++) {
+                        var m = mixins[i];
+                        if (m instanceof this)
+                            return m;
+                    }
                 }
                 if (!recursive)
                     break;
@@ -2463,7 +2478,7 @@
      */
     function node_add_mixin(node, mixin) {
         var _a;
-        (node[sym_mixins] = (_a = node[sym_mixins], (_a !== null && _a !== void 0 ? _a : []))).push(mixin);
+        (node[sym_mixins] = (_a = node[sym_mixins]) !== null && _a !== void 0 ? _a : []).push(mixin);
         mixin.node = node;
     }
     /**
@@ -2538,7 +2553,7 @@
      * This verb is used whenever an observable is passed as a child to a node.
      *
      * ```tsx
-     * import { o, $Display, $Fragment as $ } from 'elt'
+     * import { o, $Display, Fragment as $ } from 'elt'
      *
      * const o_text = o('text')
      * document.body.appendChild(<$>
@@ -2548,7 +2563,7 @@
      *
      * @category low level dom, toc
      */
-    function $Display(obs) {
+    function Display(obs) {
         if (!(obs instanceof o.Observable)) {
             return e.renderable_to_node(obs, true);
         }
@@ -2559,7 +2574,7 @@
      *
      * Display content depending on the value of a `condition`, which can be an observable.
      *
-     * If `condition` is not an observable, then the call to `$If` is resolved immediately without using
+     * If `condition` is not an observable, then the call to `If` is resolved immediately without using
      * an intermediary observable.
      *
      * If `condition` is readonly, then the observables given to `display` and `display_otherwise` are
@@ -2572,7 +2587,7 @@
      * // o_obj is nullable.
      * const o_obj = o({a: 'hello'} as {a: string} | null)
      *
-     * $If(o_obj,
+     * If(o_obj,
      *   // o_truthy here is o.Observable<{a: string}>
      *   // which is why we can safely use .p('a') without typescript complaining
      *   o_truthy => <>{o_truthy.p('a')}
@@ -2580,19 +2595,19 @@
      * ```
      *
      * ```tsx
-     *  import { o, $If, $click } from 'elt'
+     *  import { o, If, $click } from 'elt'
      *
      *  const o_some_obj = o({prop: 'value!'} as {prop: string} | null)
      *
      *  document.body.appendChild(<div>
-     *    <h1>An $If example</h1>
+     *    <h1>An If example</h1>
      *    <div><button>
      *     {$click(() => {
      *       o_some_obj.mutate(v => !!v ? null : {prop: 'clicked'})
      *     })}
      *     Inverse
      *   </button></div>
-     *   {$If(o_some_obj,
+     *   {If(o_some_obj,
      *     // Here, o_truthy is of type Observable<{prop: string}>, without the null
      *     // We can thus safely take its property, which is a Renderable (string), through the .p() method.
      *     o_truthy => <div>We have a {o_truthy.p('prop')}</div>,
@@ -2601,7 +2616,7 @@
      *  </div>)
      * ```
      */
-    function $If(condition, display, display_otherwise) {
+    function If(condition, display, display_otherwise) {
         // ts bug on condition.
         if (typeof display === 'function' && !(condition instanceof o.Observable)) {
             return condition ?
@@ -2610,9 +2625,9 @@
                     (display_otherwise(null))
                     : document.createComment('false'), true);
         }
-        return e(document.createComment('$If'), new $If.ConditionalDisplayer(display, condition, display_otherwise));
+        return e(document.createComment('If'), new If.ConditionalDisplayer(display, condition, display_otherwise));
     }
-    (function ($If) {
+    (function (If) {
         /**
          * Implementation of the `DisplayIf()` verb.
          * @internal
@@ -2637,27 +2652,27 @@
                 this.display_otherwise = display_otherwise;
             }
         }
-        $If.ConditionalDisplayer = ConditionalDisplayer;
-    })($If || ($If = {}));
+        If.ConditionalDisplayer = ConditionalDisplayer;
+    })(If || (If = {}));
     /**
      * @category dom, toc
      *
      * Repeats the `render` function for each element in `ob`, optionally separating each rendering
      * with the result of the `separator` function.
      *
-     * If `ob` is an observable, `$Repeat` will update the generated nodes to match the changes.
+     * If `ob` is an observable, `Repeat` will update the generated nodes to match the changes.
      * If it is a `o.ReadonlyObservable`, then the `render` callback will be provided a read only observable.
      *
      * `ob` is not converted to an observable if it was not one, in which case the results are executed
      * right away and only once.
      *
      * ```tsx
-     * import { o, $Repeat, $click } from 'elt'
+     * import { o, Repeat, $click } from 'elt'
      *
      * const o_mylist = o(['hello', 'world'])
      *
      * document.body.appendChild(<div>
-     *   {$Repeat(
+     *   {Repeat(
      *      o_mylist,
      *      o_item => <button>
      *        {$click(ev => o_item.mutate(value => value + '!'))}
@@ -2668,7 +2683,7 @@
      * </div>)
      * ```
      */
-    function $Repeat(ob, render, separator) {
+    function Repeat(ob, render, separator) {
         if (!(ob instanceof o.Observable)) {
             const arr = ob;
             var df = document.createDocumentFragment();
@@ -2680,9 +2695,9 @@
             }
             return df;
         }
-        return e(document.createComment('$Repeat'), new $Repeat.Repeater(ob, render, separator));
+        return e(document.createComment('Repeat'), new Repeat.Repeater(ob, render, separator));
     }
-    (function ($Repeat) {
+    (function (Repeat) {
         /**
          *  Repeats content.
          * @internal
@@ -2729,15 +2744,17 @@
                 return true;
             }
             appendChildren(count) {
+                var _a;
                 const parent = this.node.parentNode;
                 if (!parent)
                     return;
+                const insert_point = this.positions.length === 0 ? this.node.nextSibling : (_a = this.positions[this.positions.length - 1]) === null || _a === void 0 ? void 0 : _a.nextSibling;
                 var fr = document.createDocumentFragment();
                 while (count-- > 0) {
                     if (!this.next(fr))
                         break;
                 }
-                insert_before_and_init(parent, fr, this.node);
+                insert_before_and_init(parent, fr, insert_point);
             }
             removeChildren(count) {
                 var _a;
@@ -2745,15 +2762,15 @@
                     return;
                 // Détruire jusqu'à la position concernée...
                 this.next_index = this.next_index - count;
-                node_remove_after((_a = this.positions[this.next_index - 1], (_a !== null && _a !== void 0 ? _a : this.node)), this.positions[this.positions.length - 1]);
+                node_remove_after((_a = this.positions[this.next_index - 1]) !== null && _a !== void 0 ? _a : this.node, this.positions[this.positions.length - 1]);
                 this.child_obs = this.child_obs.slice(0, this.next_index);
                 this.positions = this.positions.slice(0, this.next_index);
             }
         }
-        $Repeat.Repeater = Repeater;
-    })($Repeat || ($Repeat = {}));
+        Repeat.Repeater = Repeater;
+    })(Repeat || (Repeat = {}));
     /**
-     * Similarly to `$Repeat`, `$RepeatScroll` repeats the `render` function for each element in `ob`,
+     * Similarly to `Repeat`, `RepeatScroll` repeats the `render` function for each element in `ob`,
      * optionally separated by the results of `separator`, until the elements overflow past the
      * bottom border of the current parent marked `overflow-y: auto`.
      *
@@ -2767,26 +2784,30 @@
      * > **Note** : while functional, RepeatScroll is not perfect. A "VirtualScroll" behaviour is in the
      * > roadmap to only maintain the right amount of elements on screen.
      *
+     * ```tsx
+     * @include ../examples/repeatscroll.tsx
+     * ```
+     *
      * @category dom, toc
      */
-    function $RepeatScroll(ob, render, options = {}) {
+    function RepeatScroll(ob, render, options = {}) {
         // we cheat the typesystem, which is not great, but we know what we're doing.
-        return e(document.createComment('$RepeatScroll'), new $RepeatScroll.ScrollRepeater(o(ob), render, options));
+        return e(document.createComment('RepeatScroll'), new RepeatScroll.ScrollRepeater(o(ob), render, options));
     }
-    (function ($RepeatScroll) {
+    (function (RepeatScroll) {
         /**
          * Repeats content and append it to the DOM until a certain threshold
          * is meant. Use it with `scrollable()` on the parent..
          * @internal
          */
-        class ScrollRepeater extends $Repeat.Repeater {
+        class ScrollRepeater extends Repeat.Repeater {
             constructor(ob, renderfn, options) {
                 var _a, _b;
                 super(ob, renderfn);
                 this.options = options;
                 this.parent = null;
-                this.scroll_buffer_size = (_a = this.options.scroll_buffer_size, (_a !== null && _a !== void 0 ? _a : 10));
-                this.threshold_height = (_b = this.options.threshold_height, (_b !== null && _b !== void 0 ? _b : 500));
+                this.scroll_buffer_size = (_a = this.options.scroll_buffer_size) !== null && _a !== void 0 ? _a : 10;
+                this.threshold_height = (_b = this.options.threshold_height) !== null && _b !== void 0 ? _b : 500;
                 this.separator = this.options.separator;
                 this.onscroll = () => {
                     if (!this.parent)
@@ -2856,12 +2877,12 @@
                 this.parent = null;
             }
         }
-        $RepeatScroll.ScrollRepeater = ScrollRepeater;
-    })($RepeatScroll || ($RepeatScroll = {}));
-    function $Switch(obs) {
-        return new $Switch.Switcher(obs);
+        RepeatScroll.ScrollRepeater = ScrollRepeater;
+    })(RepeatScroll || (RepeatScroll = {}));
+    function Switch(obs) {
+        return new Switch.Switcher(obs);
     }
-    (function ($Switch) {
+    (function (Switch) {
         /**
          * Used by the `Switch()` verb.
          * @internal
@@ -2873,6 +2894,7 @@
                 this.cases = [];
                 this.passthrough = () => null;
                 this.prev_case = null;
+                this.prev = '';
             }
             getter([nval]) {
                 const cases = this.cases;
@@ -2892,17 +2914,17 @@
                 this.prev_case = this.passthrough;
                 return (this.prev = this.passthrough ? this.passthrough() : null);
             }
-            $Case(value, fn) {
+            Case(value, fn) {
                 this.cases.push([value, fn]);
                 return this;
             }
-            $Else(fn) {
+            Else(fn) {
                 this.passthrough = fn;
                 return this;
             }
         }
-        $Switch.Switcher = Switcher;
-    })($Switch || ($Switch = {}));
+        Switch.Switcher = Switcher;
+    })(Switch || (Switch = {}));
 
     ////////////////////////////////////////////////////////
     const SVG = "http://www.w3.org/2000/svg";
@@ -3027,8 +3049,8 @@
      * > ever be called on it.
      *
      * ```tsx
-     * // If using jsxFactory, you have to import $Fragment and use it
-     * import { $Fragment as $ } from 'elt'
+     * // If using jsxFactory, you have to import Fragment and use it
+     * import { Fragment as $ } from 'elt'
      *
      * document.body.appendChild(<$>
      *   <p>Content</p>
@@ -3045,11 +3067,12 @@
      *
      * @category dom, toc
      */
-    function $Fragment(...children) {
+    function Fragment(...children) {
         const fr = document.createDocumentFragment();
         // This is a trick, children may contain lots of stuff
         return e(fr, children);
     }
+    const $ = Fragment;
     (function (e) {
         /**
          * Separates decorators and mixins from nodes or soon-to-be-nodes from children.
@@ -3090,7 +3113,16 @@
             else if (typeof r === 'string' || typeof r === 'number')
                 return document.createTextNode(r.toString());
             else if (o.isReadonlyObservable(r))
-                return $Display(r);
+                return Display(r);
+            else if (Array.isArray(r)) {
+                var df = document.createDocumentFragment();
+                for (var i = 0, l = r.length; i < l; i++) {
+                    var r2 = renderable_to_node(r[i], null_as_comment);
+                    if (r2)
+                        df.appendChild(r2);
+                }
+                return df;
+            }
             else
                 return r;
         }
@@ -3155,236 +3187,236 @@
         }
         e.mkwrapper = mkwrapper;
         /** @internal */
-        e.$A = mkwrapper('a');
+        e.A = mkwrapper('a');
         /** @internal */
-        e.$ABBR = mkwrapper('abbr');
+        e.ABBR = mkwrapper('abbr');
         /** @internal */
-        e.$ADDRESS = mkwrapper('address');
+        e.ADDRESS = mkwrapper('address');
         /** @internal */
-        e.$AREA = mkwrapper('area');
+        e.AREA = mkwrapper('area');
         /** @internal */
-        e.$ARTICLE = mkwrapper('article');
+        e.ARTICLE = mkwrapper('article');
         /** @internal */
-        e.$ASIDE = mkwrapper('aside');
+        e.ASIDE = mkwrapper('aside');
         /** @internal */
-        e.$AUDIO = mkwrapper('audio');
+        e.AUDIO = mkwrapper('audio');
         /** @internal */
-        e.$B = mkwrapper('b');
+        e.B = mkwrapper('b');
         /** @internal */
-        e.$BASE = mkwrapper('base');
+        e.BASE = mkwrapper('base');
         /** @internal */
-        e.$BDI = mkwrapper('bdi');
+        e.BDI = mkwrapper('bdi');
         /** @internal */
-        e.$BDO = mkwrapper('bdo');
+        e.BDO = mkwrapper('bdo');
         /** @internal */
-        e.$BIG = mkwrapper('big');
+        e.BIG = mkwrapper('big');
         /** @internal */
-        e.$BLOCKQUOTE = mkwrapper('blockquote');
+        e.BLOCKQUOTE = mkwrapper('blockquote');
         /** @internal */
-        e.$BODY = mkwrapper('body');
+        e.BODY = mkwrapper('body');
         /** @internal */
-        e.$BR = mkwrapper('br');
+        e.BR = mkwrapper('br');
         /** @internal */
-        e.$BUTTON = mkwrapper('button');
+        e.BUTTON = mkwrapper('button');
         /** @internal */
-        e.$CANVAS = mkwrapper('canvas');
+        e.CANVAS = mkwrapper('canvas');
         /** @internal */
-        e.$CAPTION = mkwrapper('caption');
+        e.CAPTION = mkwrapper('caption');
         /** @internal */
-        e.$CITE = mkwrapper('cite');
+        e.CITE = mkwrapper('cite');
         /** @internal */
-        e.$CODE = mkwrapper('code');
+        e.CODE = mkwrapper('code');
         /** @internal */
-        e.$COL = mkwrapper('col');
+        e.COL = mkwrapper('col');
         /** @internal */
-        e.$COLGROUP = mkwrapper('colgroup');
+        e.COLGROUP = mkwrapper('colgroup');
         /** @internal */
-        e.$DATA = mkwrapper('data');
+        e.DATA = mkwrapper('data');
         /** @internal */
-        e.$DATALIST = mkwrapper('datalist');
+        e.DATALIST = mkwrapper('datalist');
         /** @internal */
-        e.$DD = mkwrapper('dd');
+        e.DD = mkwrapper('dd');
         /** @internal */
-        e.$DEL = mkwrapper('del');
+        e.DEL = mkwrapper('del');
         /** @internal */
-        e.$DETAILS = mkwrapper('details');
+        e.DETAILS = mkwrapper('details');
         /** @internal */
-        e.$DFN = mkwrapper('dfn');
+        e.DFN = mkwrapper('dfn');
         /** @internal */
-        e.$DIALOG = mkwrapper('dialog');
+        e.DIALOG = mkwrapper('dialog');
         /** @internal */
-        e.$DIV = mkwrapper('div');
+        e.DIV = mkwrapper('div');
         /** @internal */
-        e.$DL = mkwrapper('dl');
+        e.DL = mkwrapper('dl');
         /** @internal */
-        e.$DT = mkwrapper('dt');
+        e.DT = mkwrapper('dt');
         /** @internal */
-        e.$EM = mkwrapper('em');
+        e.EM = mkwrapper('em');
         /** @internal */
-        e.$EMBED = mkwrapper('embed');
+        e.EMBED = mkwrapper('embed');
         /** @internal */
-        e.$FIELDSET = mkwrapper('fieldset');
+        e.FIELDSET = mkwrapper('fieldset');
         /** @internal */
-        e.$FIGCAPTION = mkwrapper('figcaption');
+        e.FIGCAPTION = mkwrapper('figcaption');
         /** @internal */
-        e.$FIGURE = mkwrapper('figure');
+        e.FIGURE = mkwrapper('figure');
         /** @internal */
-        e.$FOOTER = mkwrapper('footer');
+        e.FOOTER = mkwrapper('footer');
         /** @internal */
-        e.$FORM = mkwrapper('form');
+        e.FORM = mkwrapper('form');
         /** @internal */
-        e.$H1 = mkwrapper('h1');
+        e.H1 = mkwrapper('h1');
         /** @internal */
-        e.$H2 = mkwrapper('h2');
+        e.H2 = mkwrapper('h2');
         /** @internal */
-        e.$H3 = mkwrapper('h3');
+        e.H3 = mkwrapper('h3');
         /** @internal */
-        e.$H4 = mkwrapper('h4');
+        e.H4 = mkwrapper('h4');
         /** @internal */
-        e.$H5 = mkwrapper('h5');
+        e.H5 = mkwrapper('h5');
         /** @internal */
-        e.$H6 = mkwrapper('h6');
+        e.H6 = mkwrapper('h6');
         /** @internal */
-        e.$HEAD = mkwrapper('head');
+        e.HEAD = mkwrapper('head');
         /** @internal */
-        e.$HEADER = mkwrapper('header');
+        e.HEADER = mkwrapper('header');
         /** @internal */
-        e.$HR = mkwrapper('hr');
+        e.HR = mkwrapper('hr');
         /** @internal */
-        e.$HTML = mkwrapper('html');
+        e.HTML = mkwrapper('html');
         /** @internal */
-        e.$I = mkwrapper('i');
+        e.I = mkwrapper('i');
         /** @internal */
-        e.$IFRAME = mkwrapper('iframe');
+        e.IFRAME = mkwrapper('iframe');
         /** @internal */
-        e.$IMG = mkwrapper('img');
+        e.IMG = mkwrapper('img');
         /** @internal */
-        e.$INPUT = mkwrapper('input');
+        e.INPUT = mkwrapper('input');
         /** @internal */
-        e.$INS = mkwrapper('ins');
+        e.INS = mkwrapper('ins');
         /** @internal */
-        e.$KBD = mkwrapper('kbd');
+        e.KBD = mkwrapper('kbd');
         /** @internal */
-        e.$KEYGEN = mkwrapper('keygen');
+        e.KEYGEN = mkwrapper('keygen');
         /** @internal */
-        e.$LABEL = mkwrapper('label');
+        e.LABEL = mkwrapper('label');
         /** @internal */
-        e.$LEGEND = mkwrapper('legend');
+        e.LEGEND = mkwrapper('legend');
         /** @internal */
-        e.$LI = mkwrapper('li');
+        e.LI = mkwrapper('li');
         /** @internal */
-        e.$LINK = mkwrapper('link');
+        e.LINK = mkwrapper('link');
         /** @internal */
-        e.$MAIN = mkwrapper('main');
+        e.MAIN = mkwrapper('main');
         /** @internal */
-        e.$MAP = mkwrapper('map');
+        e.MAP = mkwrapper('map');
         /** @internal */
-        e.$MARK = mkwrapper('mark');
+        e.MARK = mkwrapper('mark');
         /** @internal */
-        e.$MENU = mkwrapper('menu');
+        e.MENU = mkwrapper('menu');
         /** @internal */
-        e.$MENUITEM = mkwrapper('menuitem');
+        e.MENUITEM = mkwrapper('menuitem');
         /** @internal */
-        e.$META = mkwrapper('meta');
+        e.META = mkwrapper('meta');
         /** @internal */
-        e.$METER = mkwrapper('meter');
+        e.METER = mkwrapper('meter');
         /** @internal */
-        e.$NAV = mkwrapper('nav');
+        e.NAV = mkwrapper('nav');
         /** @internal */
-        e.$NOSCRIPT = mkwrapper('noscript');
+        e.NOSCRIPT = mkwrapper('noscript');
         /** @internal */
-        e.$OBJECT = mkwrapper('object');
+        e.OBJECT = mkwrapper('object');
         /** @internal */
-        e.$OL = mkwrapper('ol');
+        e.OL = mkwrapper('ol');
         /** @internal */
-        e.$OPTGROUP = mkwrapper('optgroup');
+        e.OPTGROUP = mkwrapper('optgroup');
         /** @internal */
-        e.$OPTION = mkwrapper('option');
+        e.OPTION = mkwrapper('option');
         /** @internal */
-        e.$OUTPUT = mkwrapper('output');
+        e.OUTPUT = mkwrapper('output');
         /** @internal */
-        e.$P = mkwrapper('p');
+        e.P = mkwrapper('p');
         /** @internal */
-        e.$PARAM = mkwrapper('param');
+        e.PARAM = mkwrapper('param');
         /** @internal */
-        e.$PICTURE = mkwrapper('picture');
+        e.PICTURE = mkwrapper('picture');
         /** @internal */
-        e.$PRE = mkwrapper('pre');
+        e.PRE = mkwrapper('pre');
         /** @internal */
-        e.$PROGRESS = mkwrapper('progress');
+        e.PROGRESS = mkwrapper('progress');
         /** @internal */
-        e.$Q = mkwrapper('q');
+        e.Q = mkwrapper('q');
         /** @internal */
-        e.$RP = mkwrapper('rp');
+        e.RP = mkwrapper('rp');
         /** @internal */
-        e.$RT = mkwrapper('rt');
+        e.RT = mkwrapper('rt');
         /** @internal */
-        e.$RUBY = mkwrapper('ruby');
+        e.RUBY = mkwrapper('ruby');
         /** @internal */
-        e.$S = mkwrapper('s');
+        e.S = mkwrapper('s');
         /** @internal */
-        e.$SAMP = mkwrapper('samp');
+        e.SAMP = mkwrapper('samp');
         /** @internal */
-        e.$SCRIPT = mkwrapper('script');
+        e.SCRIPT = mkwrapper('script');
         /** @internal */
-        e.$SECTION = mkwrapper('section');
+        e.SECTION = mkwrapper('section');
         /** @internal */
-        e.$SELECT = mkwrapper('select');
+        e.SELECT = mkwrapper('select');
         /** @internal */
-        e.$SMALL = mkwrapper('small');
+        e.SMALL = mkwrapper('small');
         /** @internal */
-        e.$SOURCE = mkwrapper('source');
+        e.SOURCE = mkwrapper('source');
         /** @internal */
-        e.$SPAN = mkwrapper('span');
+        e.SPAN = mkwrapper('span');
         /** @internal */
-        e.$STRONG = mkwrapper('strong');
+        e.STRONG = mkwrapper('strong');
         /** @internal */
-        e.$STYLE = mkwrapper('style');
+        e.STYLE = mkwrapper('style');
         /** @internal */
-        e.$SUB = mkwrapper('sub');
+        e.SUB = mkwrapper('sub');
         /** @internal */
-        e.$SUMMARY = mkwrapper('summary');
+        e.SUMMARY = mkwrapper('summary');
         /** @internal */
-        e.$SUP = mkwrapper('sup');
+        e.SUP = mkwrapper('sup');
         /** @internal */
-        e.$TABLE = mkwrapper('table');
+        e.TABLE = mkwrapper('table');
         /** @internal */
-        e.$TBODY = mkwrapper('tbody');
+        e.TBODY = mkwrapper('tbody');
         /** @internal */
-        e.$TD = mkwrapper('td');
+        e.TD = mkwrapper('td');
         /** @internal */
-        e.$TEXTAREA = mkwrapper('textarea');
+        e.TEXTAREA = mkwrapper('textarea');
         /** @internal */
-        e.$TFOOT = mkwrapper('tfoot');
+        e.TFOOT = mkwrapper('tfoot');
         /** @internal */
-        e.$TH = mkwrapper('th');
+        e.TH = mkwrapper('th');
         /** @internal */
-        e.$THEAD = mkwrapper('thead');
+        e.THEAD = mkwrapper('thead');
         /** @internal */
-        e.$TIME = mkwrapper('time');
+        e.TIME = mkwrapper('time');
         /** @internal */
-        e.$TITLE = mkwrapper('title');
+        e.TITLE = mkwrapper('title');
         /** @internal */
-        e.$TR = mkwrapper('tr');
+        e.TR = mkwrapper('tr');
         /** @internal */
-        e.$TRACK = mkwrapper('track');
+        e.TRACK = mkwrapper('track');
         /** @internal */
-        e.$U = mkwrapper('u');
+        e.U = mkwrapper('u');
         /** @internal */
-        e.$UL = mkwrapper('ul');
+        e.UL = mkwrapper('ul');
         /** @internal */
-        e.$VAR = mkwrapper('var');
+        e.VAR = mkwrapper('var');
         /** @internal */
-        e.$VIDEO = mkwrapper('video');
+        e.VIDEO = mkwrapper('video');
         /** @internal */
-        e.$WBR = mkwrapper('wbr');
+        e.WBR = mkwrapper('wbr');
         /**
          * An alias to conform to typescript's JSX
          * @internal
          */
         e.createElement = e;
         /** @internal */
-        e.Fragment = $Fragment; //(at: Attrs, ch: DocumentFragment): e.JSX.Element
+        e.Fragment = $; //(at: Attrs, ch: DocumentFragment): e.JSX.Element
     })(e || (e = {}));
     if ('undefined' !== typeof window && typeof window.E === 'undefined' || typeof global !== 'undefined' && typeof (global.E) === 'undefined') {
         window.E = e;
@@ -3403,7 +3435,7 @@
      * An App is a collection of services that altogether form an application.
      * These services contain code, data and views that produce DOM elements.
      *
-     * Use [[App.$DisplayApp]] to instanciate an App and [[App#$DisplayChildApp]] for child apps.
+     * Use [[App.DisplayApp]] to instanciate an App and [[App#DisplayChildApp]] for child apps.
      *
      * An `App` needs to be provided a view name (see [[App.view]]) which will be the main
      * view that the `App` displays, and one or several service classes (not objects), that are
@@ -3445,10 +3477,10 @@
      */
     class App extends Mixin {
         /** @internal */
-        constructor(main_view, __parent_app) {
+        constructor(main_view, _parent_app) {
             super();
             this.main_view = main_view;
-            this.__parent_app = __parent_app;
+            this._parent_app = _parent_app;
             /** @internal */
             this._cache = new Map();
             /** @internal */
@@ -3457,7 +3489,7 @@
             this._children_app = new Set();
             /**
              * The currently active services, ie. the services that were specifically
-             * given to [[#App.$DisplayApp]] or [[App#activate]]
+             * given to [[#App.DisplayApp]] or [[App#activate]]
              */
             this.o_active_services = o(this._active_services);
             /**
@@ -3472,14 +3504,14 @@
             // Tell our parent that we exist.
             // Now, when cleaning up, the parent will check that it doesn't remove a service
             // that the child needs.
-            (_a = this.__parent_app) === null || _a === void 0 ? void 0 : _a._children_app.add(this);
+            (_a = this._parent_app) === null || _a === void 0 ? void 0 : _a._children_app.add(this);
         }
         /** @internal */
         removed() {
             // When removed, unregister ourselves from our parent app, the services we had registered
             // now no longer hold a requirement in the parent app's cache.
-            if (this.__parent_app)
-                this.__parent_app._children_app.delete(this);
+            if (this._parent_app)
+                this._parent_app._children_app.delete(this);
         }
         getService(key, init_if_not_found = true) {
             // First try to see if we already own a version of this service.
@@ -3487,9 +3519,9 @@
             if (cached)
                 return cached;
             // Try our parent app before trying to init it ourselves.
-            if (this.__parent_app) {
+            if (this._parent_app) {
                 // In the parent app however, we won't try to instanciate anything if it is not found
-                cached = this.__parent_app.getService(key, false);
+                cached = this._parent_app.getService(key, false);
                 if (cached)
                     return cached;
             }
@@ -3504,8 +3536,8 @@
                 }
                 else {
                     var _ap = this;
-                    while (_ap.__parent_app) {
-                        _ap = _ap.__parent_app;
+                    while (_ap._parent_app) {
+                        _ap = _ap._parent_app;
                     }
                     _ap._cache.set(key, result);
                 }
@@ -3531,7 +3563,7 @@
         getViews() {
             var res = new Map();
             for (var service of this.getServicesInRequirementOrder(this.o_active_services.get())) {
-                const views = service.constructor.__views;
+                const views = service.constructor._views;
                 if (!views)
                     continue;
                 for (var name of views) {
@@ -3625,7 +3657,7 @@
          * ```
          */
         display(view_name) {
-            return $Display(this.o_view_services.tf(v => {
+            return Display(this.o_view_services.tf(v => {
                 return v.get(view_name);
                 // we use another tf to not retrigger the display if the service implementing the view did
                 // not change.
@@ -3654,7 +3686,7 @@
          * @include ../examples/app.subapp.tsx
          * ```
          */
-        $DisplayChildApp(view_name, ...services) {
+        DisplayChildApp(view_name, ...services) {
             var newapp = new App(view_name, this);
             var res = newapp.display(view_name);
             newapp.activate(...services);
@@ -3682,20 +3714,20 @@
          * }
          *
          * document.body.appendChild(
-         *   App.$DisplayApp('Main', LoginService)
+         *   App.DisplayApp('Main', LoginService)
          * )
          * ```
          *
          * @category app, toc
          */
-        function $DisplayApp(main_view, ...services) {
+        function DisplayApp(main_view, ...services) {
             var app = new App(main_view);
             var disp = app.display(main_view);
             app.activate(...services);
             node_add_mixin(disp, app);
             return disp;
         }
-        App.$DisplayApp = $DisplayApp;
+        App.DisplayApp = DisplayApp;
         /**
          * @category app, toc
          *
@@ -3715,7 +3747,7 @@
         function view(object, key, desc) {
             var _a;
             const cons = object.constructor;
-            (cons.__views = (_a = cons.__views, (_a !== null && _a !== void 0 ? _a : new Set()))).add(key);
+            (cons._views = (_a = cons._views) !== null && _a !== void 0 ? _a : new Set()).add(key);
         }
         App.view = view;
         /**
@@ -3810,7 +3842,7 @@
              *
              * If the requested service does not already exist within this [[App]], instanciate it.
              *
-             * See [[App.$DisplayChildApp]] and [[App.view]] for examples.
+             * See [[App.DisplayChildApp]] and [[App.view]] for examples.
              */
             require(service_def) {
                 var result = this.app.getService(service_def);
@@ -3821,12 +3853,6 @@
         App.Service = Service;
     })(App || (App = {}));
 
-    exports.$Display = $Display;
-    exports.$Fragment = $Fragment;
-    exports.$If = $If;
-    exports.$Repeat = $Repeat;
-    exports.$RepeatScroll = $RepeatScroll;
-    exports.$Switch = $Switch;
     exports.$class = $class;
     exports.$click = $click;
     exports.$id = $id;
@@ -3842,8 +3868,14 @@
     exports.App = App;
     exports.CommentContainer = CommentContainer;
     exports.Component = Component;
+    exports.Display = Display;
     exports.Displayer = Displayer;
+    exports.Fragment = Fragment;
+    exports.If = If;
     exports.Mixin = Mixin;
+    exports.Repeat = Repeat;
+    exports.RepeatScroll = RepeatScroll;
+    exports.Switch = Switch;
     exports.append_child_and_init = append_child_and_init;
     exports.e = e;
     exports.insert_before_and_init = insert_before_and_init;

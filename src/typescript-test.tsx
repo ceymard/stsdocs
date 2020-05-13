@@ -64,7 +64,7 @@ function Declaration({doc}: {doc: Documentable}) {
     })}
     {doc.withVariable((name, cls) => <VarDecl name={name} v={cls}/>)}
     {doc.withTypealias((name, cls) => <TypeAlias name={name} typ={cls}/>)}
-    <div class={css.doc}>{doc.docs ? raw(md.render(doc.docs)) : '¯\\_(ツ)_/¯'}</div>
+    <div class={css.doc}>{doc.docs ? raw(md.render(doc.docs)) : (console.warn(`${doc.name} is not documented`), '¯\\_(ツ)_/¯')}</div>
 
     {doc.withMembers(members => <div class='st-nest'>
       {members.filter(m => !m.tags.has('internal')).map(m => {

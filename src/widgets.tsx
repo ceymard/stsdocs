@@ -71,7 +71,12 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
     }
 
     // console.dir(type.compilerType, {depth: 0})
+    try {
+      return <Type type={type.getApparentType()}/>
+    } catch { }
     console.log('TYPE NOT FOUND - ', type.constructor.name, type.compilerType.constructor.name, type.getText())
+    // console.dir(type.getApparentType())
+
     return <span>{txt}</span>
 
   } else if (type instanceof ts.TypeNode) {
@@ -126,7 +131,7 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       return <span>{type.getText()}</span>
     } else if (ts.Node.isTypeLiteralNode(type)) {
       // type.getIndexSignatures()
-    return <span class={css.type}>{'{'} {Repeat(type.getIndexSignatures(), sig => <>[<Type type={sig.getKeyTypeNode()}/>]: <Type type={sig.getReturnTypeNode()}/></>, ', ')} {Repeat(type.getProperties(), p => <>{p.getName()}{p.getQuestionTokenNode() ? '?' : ''}: <Type type={p.getTypeNode()}/></>, ', ')} {'}'}</span>
+    return <span class={css.type}>{'{'}&nbsp;{Repeat(type.getIndexSignatures(), sig => <>[<Type type={sig.getKeyTypeNode()}/>]: <Type type={sig.getReturnTypeNode()}/></>, ', ')} {Repeat(type.getProperties(), p => <>{p.getName()}{p.getQuestionTokenNode() ? '?' : ''}: <Type type={p.getTypeNode()}/></>, ', ')}&nbsp;{'}'}</span>
     }
   } else if (ts.Node.isExpression(type) || ['void', 'any', 'never'].includes((type as any).getText().trim())) {
     return <span>{type.getText()}</span>
@@ -141,11 +146,13 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
     const param: ts.TypeParameterDeclaration = chlds[2] as any
     const t: ts.TypeNode = chlds[chlds.length - 2] as any
 
-    return <span>{'{'}[<TypeParam t={param}/>]{has_quest ? '?' : ''}: <Type type={t}/>{'}'}</span>
+    return <span>{'{'}&nbsp;[<TypeParam t={param}/>]{has_quest ? '?' : ''}: <Type type={t}/>&nbsp;{'}'}</span>
   } else if (ts.ts.isTypeOperatorNode(type.compilerNode)) {
     // FIXME we should PROBABLY go get the type of this expression and analyze it with the whole
     // getSymbol thing
     return <span>typeof {type.compilerNode.getChildAt(1).getText()}</span>
+  } else if (ts.ts.isTypeQueryNode(type.compilerNode)) {
+  return <span>{type.getText()}</span>
   }
   // var node = type.compilerNode
 

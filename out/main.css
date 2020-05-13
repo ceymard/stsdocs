@@ -52,8 +52,14 @@ body.dark {
 }
 
 .st-type {
-  background-color: rgba(var(--st-primary), 0.14);
+  /* background-color: rgba(var(--st-primary), 0.14); */
   padding: 0 2px;
+  border-bottom: 2px solid rgba(var(--st-primary), 0.14);
+}
+
+.st-type > .st-type {
+  padding-bottom: 3px;
+  border-bottom: 2px solid rgba(var(--st-primary), 0.24);
 }
 
 code {

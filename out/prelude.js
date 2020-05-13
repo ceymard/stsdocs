@@ -27,7 +27,7 @@ function demo_display(...a) {
 }
 
 function DemoBtn(attrs, chld) {
-  return E.$BUTTON(
+  return E.BUTTON(
     elt.$click(attrs.do),
     attrs.do.toString().trim().replace(/function\s\([\)]*\)\s*\{\s*(?:return\s*)((?:.|\n)*)\s*\}\s*/m, (m, ma) => ma)
       .replace(/\s*\([^\)]*\)\s*=>\s*/, '')
