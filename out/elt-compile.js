@@ -69,6 +69,7 @@ const p = e.$DIV()
       acquireTypes: false,
       monacoSettings: {
         fontFamily: '"Oxygen Mono", monospace',
+        fontSize: 16
       },
       compilerOptions: {
         target: 5,
