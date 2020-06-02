@@ -137,4 +137,4 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
 }
 
 var t = (<DocTemplate doc={doc}></DocTemplate>)
-t.render(fs.createWriteStream('./out/doc.html'))
+t.render(fs.createWriteStream('./out/index.html'))
