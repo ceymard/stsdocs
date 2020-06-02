@@ -160,6 +160,7 @@ export class Documentable {
         try {
           return `\`\`\`${ext.trim()}\n` + fs.readFileSync(try_path, 'utf-8') + '\n```'
         } catch (e) {
+          console.warn(`file not found: "${try_path}"`)
           return `file not found: "${try_path}"`
         }
       })
@@ -168,6 +169,7 @@ export class Documentable {
         try {
           return fs.readFileSync(try_path, 'utf-8')
         } catch (e) {
+          console.warn(`file not found: "${try_path}"`)
           return `file not found: "${try_path}"`
         }
       })

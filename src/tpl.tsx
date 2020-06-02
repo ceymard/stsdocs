@@ -15,7 +15,7 @@ export function Template(a: {
       <head>
         <title>{a.title ?? 'TITLE MISSING'}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-        <link rel="stylesheet" href='./normalize.css'/>
+      <link rel="stylesheet" href='./normalize.css'/>
         <link rel="stylesheet" href="./main.css"/>
         {If(a.description, desc => <meta name='description' content={desc}/>)}
         <MoreHead.Display/>
