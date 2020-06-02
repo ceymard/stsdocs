@@ -155,6 +155,14 @@ export class Documentable {
           categories.add(c.trim())
         return ''
       })
+      .replace(/@code\s*([^\n]+\.([^\n]+))\s*\n?/g, (_, path: string, ext: string) => {
+        var try_path = pth.join(pth.dirname(src_path), path.trim())
+        try {
+          return `\`\`\`${ext.trim()}\n` + fs.readFileSync(try_path, 'utf-8') + '\n```'
+        } catch (e) {
+          return `file not found: "${try_path}"`
+        }
+      })
       .replace(/@include\s*([^\n]+)\s*\n?/g, (_, path: string) => {
         var try_path = pth.join(pth.dirname(src_path), path.trim())
         try {

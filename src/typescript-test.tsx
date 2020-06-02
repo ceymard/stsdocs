@@ -130,6 +130,8 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     <div style='display: none' id='elt-d-ts'>{include('elt/elt.d.ts', {escape: true})}</div>
     <script src='./elt-compile.js'></script>
     <MoreHead>
+      <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap" rel="stylesheet"/>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap" rel="stylesheet"/>
       <style>{include('prismjs/themes/prism-tomorrow.css')}</style>
     </MoreHead>
   </Template>

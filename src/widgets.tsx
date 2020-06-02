@@ -100,14 +100,14 @@ export function Type({type}: Attrs & {type: ts.TypeNode | ts.Type | ts.Expressio
       return <a href={`#${Documentable.node_map.get(resolved!)?.name ?? typename}`}>{typename}<TypeArgs ts={type.getTypeArguments().filter(t => !ts.Node.isThisTypeNode(t))}/></a>
       // console.log(type.getType())
     } else if (ts.Node.isFunctionTypeNode(type)) {
-      return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) => <Type type={type.getReturnTypeNode()}/></span>
+      return <span class={css.type}>({Repeat(type.getParameters(), par => <ParamOrVar v={par}/>, ', ')}) =&lt; <Type type={type.getReturnTypeNode()}/></span>
     } else if (ts.Node.isConditionalTypeNode(type)) {
       return <span class={css.type}><Type type={type.getCheckType()}/> extends <Type type={type.getExtendsType()}/> ? <Type type={type.getTrueType()}/> : <Type type={type.getFalseType()}/></span>
       // console.log('!!!', type.getText())
     } else if (ts.Node.isThisTypeNode(type)) {
       return <span>this</span>
     } else if (ts.Node.isConstructorTypeNode(type)) {
-      return <span>new () => <Type type={type.getReturnTypeNode() ?? type.getReturnType()}/></span>
+      return <span>new () =&lt; <Type type={type.getReturnTypeNode() ?? type.getReturnType()}/></span>
     } else if (ts.Node.isInferTypeNode(type)) {
       return <span>infer {type.getTypeParameter().getName()}</span>
     } else if (ts.Node.isIndexedAccessTypeNode(type)) {
