@@ -158,7 +158,7 @@ export class Documentable {
       .replace(/@code\s*([^\n]+\.([^\n]+))\s*\n?/g, (_, path: string, ext: string) => {
         var try_path = pth.join(pth.dirname(src_path), path.trim())
         try {
-          return `\`\`\`${ext.trim()}\n` + fs.readFileSync(try_path, 'utf-8') + '\n```'
+          return `\`\`\`${ext.trim()}\n` + fs.readFileSync(try_path, 'utf-8') + '\n```\n'
         } catch (e) {
           console.warn(`file not found: "${try_path}"`)
           return `file not found: "${try_path}"`
