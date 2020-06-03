@@ -1,5 +1,6 @@
 import * as ts from 'ts-morph'
 import * as fs from 'fs'
+import * as pth from 'path'
 import { s, Child, raw, include } from 'stsx'
 import { Documentable, sorter, MapArray } from './documentable'
 import { Template, MoreHead } from './tpl'
@@ -94,7 +95,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     }
   }
 
-  return <Template title={`${doc.sourcefile?.getFilePath() ?? ''} documentation`}>
+  return <Template title={`${pth.basename(PROJECT_BASE) ?? ''} documentation`}>
     <div class='st-row'>
       <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
