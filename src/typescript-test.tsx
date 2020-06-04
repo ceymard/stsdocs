@@ -114,10 +114,12 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
 
   return <Template title={`${pth.basename(PROJECT_BASE) ?? ''} documentation`}>
     <div class='st-row'>
-      <div class='flex-column'>
-        <input id='search' class='st-search' placeholder='filter'/>
+      <div id='sidebar' class='flex-column'>
+        <div id='searchdiv'>
+          <input id='search' class='st-search' placeholder='search...'/>
+        </div>
         <div id='toc' class='st-toc flex-absolute-grow'>
-          {titles.map(t => <a class={`toc-nest-${t[3]}`} href={'#' + t[1]}><b>{t[2]}</b> {raw(t[0])}</a>)}
+          {titles.map(t => <a class={`toc-entry toc-nest-${t[3]}`} href={'#' + t[1]}><b>{t[2]}</b> {raw(t[0])}</a>)}
           {Array.from(by_categories.entries()).filter(c => c[0] && c[0] !== 'toc').map(([category, declarations]) => <>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
             {declarations.filter(d => d.categories.has('toc')).map(e =>

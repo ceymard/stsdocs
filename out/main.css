@@ -76,6 +76,20 @@ body.dark {
   --st-error: 255, 99, 99;
 }
 
+#searchdiv {
+  padding: 16px;
+  background-color: rgb(var(--st-class));
+}
+
+#searchdiv input {
+  width: 100%;
+  color: white;
+  padding: 4px;
+  border-color: rgba(255, 255, 255, 0.5);
+  font-size: 1.3em;
+}
+
+
 code {
   font-family: 'Oxygen Mono', monospace;
   font-weight: 400;
@@ -309,10 +323,6 @@ a:hover {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(var(--st-primary), 0.1);
-}
-
-.st-search {
-  margin: 16px;
 }
 
 input {
