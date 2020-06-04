@@ -231,12 +231,19 @@ export function TypeParam({t}: Attrs & {t: ts.TypeParameterDeclaration}) {
   var kind = t.getChildrenOfKind(ts.ts.SyntaxKind.InKeyword).length > 0 ? 'in' :
     t.getChildrenOfKind(ts.ts.SyntaxKind.OfKeyword).length > 0 ? 'of' :
     'extends'
-  return <span>{t.getName()}{If(ex, ex => <> {kind} <Type type={ex}/></>)}</span>
+  return <span><b>{t.getName()}</b>{If(ex, ex => <> {kind} <Type type={ex}/></>)}</span>
 }
 
 export function TypeParams({ts}: Attrs & {ts: ts.TypeParameterDeclaration[]}) {
   return If(ts.length, () => <>&lt;{Repeat(ts, t => <TypeParam t={t}/>, ', ')}&gt;</>)
 }
+
+
+export function TypeParamNames({ts}: Attrs & {ts: ts.TypeParameterDeclaration[]}) {
+  return If(ts.length, () => <>&lt;{Repeat(ts, t => t.getName(), ', ')}&gt;</>)
+}
+
+
 export function TypeArgs({ts}: Attrs & {ts: ts.TypeNode[]}) {
   return If(ts.length > 0, () => <>&lt;{Repeat(ts, typ => <Type type={typ}/>, ', ')}&gt;</>)
 }
@@ -246,9 +253,18 @@ export function FnProto(a: Attrs & {proto: ts.FunctionDeclaration | ts.MethodDec
   var fn = a.proto
   var mods = hasModifiers(a.proto) ? ' ' + a.proto.getModifiers().map(m => m.getText()).filter(m => m !== 'export').join(' ') + ' ' : ''
   var params = fn.getParameters()
-  var many = params.length > 1
+  var type_params = fn.getTypeParameters()
+  // var many = params.length > 1
 
-return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({many ? '\n  ': ''}{Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, many ? ',\n  ' : ', ')}{many ? '\n' : ''}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
+  // return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}><TypeParams ts={fn.getTypeParameters()}/>({many ? '\n  ': ''}{Repeat(fn.getParameters(), p => <ParamOrVar v={p}/>, many ? ',\n  ' : ', ')}{many ? '\n' : ''}): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
+  // </DocBlock>
+  return <DocBlock class={css.kind_function} kind={a.kind} name={mods + a.name}>
+    <TypeParamNames ts={fn.getTypeParameters()}/>({params.map(p => (p.isRestParameter() ? <>&hellip;</> : '') + p.getName() + (p.isOptional() ? '?' : '')).join(', ')}
+    ): <Type type={fn.getReturnTypeNode()! ?? fn.getReturnType()}/>
+    {If(type_params.length, () => <>{'\n'}</>)}
+    {Repeat(type_params.filter(t => t.getConstraint()), ty => <>{'\n  '}<TypeParam t={ty}/></>)}
+    {If(params.length, () => <>{'\n'}</>)}
+    {Repeat(fn.getParameters(), par => <>{'\n  '}<ParamOrVar v={par}/></>)}
   </DocBlock>
 }
 

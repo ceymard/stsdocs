@@ -95,11 +95,24 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     }
   }
 
+  var doc_id = 0
+  var titles: [string, string][] = []
+
+  const doc_html = md.render(Documentable.doclinks(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')), {
+    html: true
+  }).replace(/<(h\d+)[^]+?<\/\1>/g, header => {
+    const id = `_doc${doc_id++}`
+    titles.push([header, id])
+    return header.replace(/^<h\d+/, start => start + ` id="${id}"`)
+    // return header + ` id='doc${doc_id++}'`
+  })
+
   return <Template title={`${pth.basename(PROJECT_BASE) ?? ''} documentation`}>
     <div class='st-row'>
       <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
         <div class='st-toc flex-absolute-grow'>
+          {titles.map(t => <a href={'#' + t[1]}>{raw(t[0])}</a>)}
           {Array.from(by_categories.entries()).filter(c => c[0] && c[0] !== 'toc').map(([category, declarations]) => <div>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
             {declarations.filter(d => d.categories.has('toc')).map(e =>
@@ -109,9 +122,7 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
         </div>
       </div>
       <div class='st-docmain'>
-        {raw(md.render(Documentable.doclinks(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')), {
-          html: true
-        }))}
+        {raw(doc_html)}
         <h1>API Documentation</h1>
         {all_declarations.filter(d => !d.tags.has('internal')).map(decl => <Declaration doc={decl}/>)}
       </div>
@@ -130,10 +141,8 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
 
     <div style='display: none' id='elt-d-ts'>{include('elt/elt.d.ts', {escape: true})}</div>
     <script src='./elt-compile.js'></script>
-    <MoreHead>
-      <link href="https://fonts.googleapis.com/css2?family=Open+Sans&family=Oxygen+Mono&display=swap" rel="stylesheet"/>
-      <style>{include('prismjs/themes/prism-tomorrow.css')}</style>
-    </MoreHead>
+    <style>{include('prismjs/themes/prism-tomorrow.css')}</style>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans&family=Oxygen+Mono&display=swap" rel="stylesheet"/>
   </Template>
 }
 
