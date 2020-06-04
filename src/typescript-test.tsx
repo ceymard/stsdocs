@@ -96,13 +96,18 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
   }
 
   var doc_id = 0
-  var titles: [string, string][] = []
+  var titles: [string, string, string, number][] = []
+  var counters: number[] = [0]
 
   const doc_html = md.render(Documentable.doclinks(fs.readFileSync(PROJECT_BASE + '/README.md', 'utf-8')), {
     html: true
   }).replace(/<(h\d+)[^]+?<\/\1>/g, header => {
     const id = `_doc${doc_id++}`
-    titles.push([header, id])
+    const nb = parseInt(/<h(\d+)/.exec(header)![1])
+    counters = counters.slice(0, nb)
+    while (counters.length < nb) { counters.push(0) }
+    counters[counters.length - 1]++
+    titles.push([header.replace(/<[^>]+>(.*)<\/[^>]+>/, (_, cnt) => cnt), id, counters.join('.') + '. ', nb])
     return header.replace(/^<h\d+/, start => start + ` id="${id}"`)
     // return header + ` id='doc${doc_id++}'`
   })
@@ -111,14 +116,14 @@ function DocTemplate(a: {doc: Documentable}, ch: Child[]) {
     <div class='st-row'>
       <div class='flex-column'>
         <input id='search' class='st-search' placeholder='filter'/>
-        <div class='st-toc flex-absolute-grow'>
-          {titles.map(t => <a href={'#' + t[1]}>{raw(t[0])}</a>)}
-          {Array.from(by_categories.entries()).filter(c => c[0] && c[0] !== 'toc').map(([category, declarations]) => <div>
+        <div id='toc' class='st-toc flex-absolute-grow'>
+          {titles.map(t => <a class={`toc-nest-${t[3]}`} href={'#' + t[1]}><b>{t[2]}</b> {raw(t[0])}</a>)}
+          {Array.from(by_categories.entries()).filter(c => c[0] && c[0] !== 'toc').map(([category, declarations]) => <>
             <h3>{category?.replace(/^[a-z]/, m => m.toUpperCase()) ?? 'Other'}</h3>
             {declarations.filter(d => d.categories.has('toc')).map(e =>
               <div><a class={'st-kind-' + e.kind} href={`#${e.name}`}><b>{e.name}{e.kind === 'function' || e.kind === 'method' ? '()' : ''}</b></a></div>
             )}
-          </div>)}
+          </>)}
         </div>
       </div>
       <div class='st-docmain'>

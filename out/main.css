@@ -4,22 +4,25 @@
 
 a > h1, a > h2, a> h3, a > h4 {
   margin: 0.2em 0;
-}
-
-a > h1 {
-  font-size: 1.1em;
-}
-
-
-a > h2 {
-  /* counter-reset: toc-h3; */
   font-size: 1em;
+  font-weight: normal;
+}
+
+.st-toc a > b {
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.toc-nest-2 {
   margin-left: 1em;
 }
 
-a > h3 {
-  font-size: 0.9em;
+.toc-nest-3 {
   margin-left: 2em;
+}
+
+.toc-nest-4 {
+  margin-left: 3em;
 }
 
 html, body {
